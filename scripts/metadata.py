@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+CURRENT_INDEX_VERSION = 1
+DEFAULT_PARSER_VERSION = "1"
+
 
 @dataclass(frozen=True)
 class FileFingerprint:
@@ -21,6 +24,22 @@ class SourceRecord:
     size_bytes: int
     modified_ns: int
     chunks: int
+    mime_type: str
+    extension: str
+    parser_name: str
+    parser_version: str
+    index_version: int
+
+
+def _add_column_if_missing(
+    connection: sqlite3.Connection,
+    table: str,
+    column: str,
+    definition: str,
+) -> None:
+    columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def init_metadata_db(db_path: Path) -> None:
@@ -34,10 +53,20 @@ def init_metadata_db(db_path: Path) -> None:
                 size_bytes INTEGER NOT NULL,
                 modified_ns INTEGER NOT NULL,
                 chunks INTEGER NOT NULL,
+                mime_type TEXT NOT NULL DEFAULT '',
+                extension TEXT NOT NULL DEFAULT '',
+                parser_name TEXT NOT NULL DEFAULT '',
+                parser_version TEXT NOT NULL DEFAULT '',
+                index_version INTEGER NOT NULL DEFAULT 0,
                 indexed_at TEXT NOT NULL
             )
             """
         )
+        _add_column_if_missing(connection, "source_documents", "mime_type", "TEXT NOT NULL DEFAULT ''")
+        _add_column_if_missing(connection, "source_documents", "extension", "TEXT NOT NULL DEFAULT ''")
+        _add_column_if_missing(connection, "source_documents", "parser_name", "TEXT NOT NULL DEFAULT ''")
+        _add_column_if_missing(connection, "source_documents", "parser_version", "TEXT NOT NULL DEFAULT ''")
+        _add_column_if_missing(connection, "source_documents", "index_version", "INTEGER NOT NULL DEFAULT 0")
 
 
 def compute_file_fingerprint(path: Path) -> FileFingerprint:
@@ -59,7 +88,8 @@ def get_source_record(db_path: Path, relative_path: str) -> SourceRecord | None:
     with sqlite3.connect(db_path) as connection:
         row = connection.execute(
             """
-            SELECT path, sha256, size_bytes, modified_ns, chunks
+            SELECT path, sha256, size_bytes, modified_ns, chunks,
+                   mime_type, extension, parser_name, parser_version, index_version
             FROM source_documents
             WHERE path = ?
             """,
@@ -74,6 +104,11 @@ def get_source_record(db_path: Path, relative_path: str) -> SourceRecord | None:
         size_bytes=int(row[2]),
         modified_ns=int(row[3]),
         chunks=int(row[4]),
+        mime_type=str(row[5]),
+        extension=str(row[6]),
+        parser_name=str(row[7]),
+        parser_version=str(row[8]),
+        index_version=int(row[9]),
     )
 
 
@@ -82,7 +117,8 @@ def list_source_records(db_path: Path) -> list[SourceRecord]:
     with sqlite3.connect(db_path) as connection:
         rows = connection.execute(
             """
-            SELECT path, sha256, size_bytes, modified_ns, chunks
+            SELECT path, sha256, size_bytes, modified_ns, chunks,
+                   mime_type, extension, parser_name, parser_version, index_version
             FROM source_documents
             ORDER BY path
             """
@@ -95,6 +131,11 @@ def list_source_records(db_path: Path) -> list[SourceRecord]:
             size_bytes=int(row[2]),
             modified_ns=int(row[3]),
             chunks=int(row[4]),
+            mime_type=str(row[5]),
+            extension=str(row[6]),
+            parser_name=str(row[7]),
+            parser_version=str(row[8]),
+            index_version=int(row[9]),
         )
         for row in rows
     ]
@@ -117,7 +158,7 @@ def source_needs_ingest(
     record = get_source_record(db_path, relative_path)
     if record is None:
         return True
-    return record.sha256 != fingerprint.sha256
+    return record.sha256 != fingerprint.sha256 or record.index_version != CURRENT_INDEX_VERSION
 
 
 def mark_source_indexed(db_path: Path, record: SourceRecord) -> None:
@@ -127,14 +168,21 @@ def mark_source_indexed(db_path: Path, record: SourceRecord) -> None:
         connection.execute(
             """
             INSERT INTO source_documents (
-                path, sha256, size_bytes, modified_ns, chunks, indexed_at
+                path, sha256, size_bytes, modified_ns, chunks,
+                mime_type, extension, parser_name, parser_version, index_version,
+                indexed_at
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET
                 sha256 = excluded.sha256,
                 size_bytes = excluded.size_bytes,
                 modified_ns = excluded.modified_ns,
                 chunks = excluded.chunks,
+                mime_type = excluded.mime_type,
+                extension = excluded.extension,
+                parser_name = excluded.parser_name,
+                parser_version = excluded.parser_version,
+                index_version = excluded.index_version,
                 indexed_at = excluded.indexed_at
             """,
             (
@@ -143,6 +191,11 @@ def mark_source_indexed(db_path: Path, record: SourceRecord) -> None:
                 record.size_bytes,
                 record.modified_ns,
                 record.chunks,
+                record.mime_type,
+                record.extension,
+                record.parser_name,
+                record.parser_version,
+                record.index_version,
                 indexed_at,
             ),
         )

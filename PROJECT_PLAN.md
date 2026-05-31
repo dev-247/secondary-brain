@@ -140,16 +140,16 @@ Target: 3-5 days
 
 - Add document fingerprints and skip unchanged files. In progress: basic SQLite metadata and unchanged-file skipping are implemented.
 - Add delete/reindex behavior for removed or changed files. Done.
-- Store canonical metadata in SQLite.
+- Store canonical metadata in SQLite. Done.
 - Improve citations for PDFs with page or section anchors where Docling exposes them.
 - Track parse errors without stopping the entire ingest run. Done.
-- Record source MIME type, size, modified time, hash, parser version, and index version.
+- Record source MIME type, size, modified time, hash, parser version, and index version. Done.
 
 Exit criteria:
 
 - Re-running ingest does not duplicate unchanged content. Basic behavior implemented.
 - Changed and deleted files are reflected in the index. Done.
-- Every indexed chunk has durable source metadata.
+- Every indexed chunk has durable source metadata. Done.
 - Failed files appear in a readable ingest report. Done.
 
 ### Phase 2: Retrieval Quality and Evaluation

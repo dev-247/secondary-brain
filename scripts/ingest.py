@@ -13,6 +13,8 @@ from scripts.chunking import Chunk, chunk_markdown, chunk_plain_text
 from scripts.config import METADATA_DB_PATH, QDRANT_COLLECTION, SUPPORTED_EXTENSIONS, VAULT_DIR
 from scripts.embeddings import embed_text
 from scripts.metadata import (
+    CURRENT_INDEX_VERSION,
+    DEFAULT_PARSER_VERSION,
     delete_source_record,
     get_source_record,
     list_source_records,
@@ -24,6 +26,20 @@ from scripts.metadata import (
 from scripts.qdrant_setup import check_qdrant_health, ensure_collection, get_client
 
 console = Console()
+
+TEXT_MIME_TYPES = {
+    ".md": "text/markdown",
+    ".markdown": "text/markdown",
+    ".txt": "text/plain",
+}
+
+DOCLING_MIME_TYPES = {
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
 
 
 def _point_id(source_path: str, chunk_index: int) -> str:
@@ -49,6 +65,17 @@ def _extract_text(path: Path) -> tuple[str, str]:
         return title, text
     title, markdown = _extract_with_docling(path)
     return title, markdown
+
+
+def _source_metadata(path: Path) -> dict[str, object]:
+    extension = path.suffix.lower()
+    return {
+        "mime_type": TEXT_MIME_TYPES.get(extension) or DOCLING_MIME_TYPES.get(extension) or "application/octet-stream",
+        "extension": extension,
+        "parser_name": "direct" if extension in TEXT_MIME_TYPES else "docling",
+        "parser_version": DEFAULT_PARSER_VERSION,
+        "index_version": CURRENT_INDEX_VERSION,
+    }
 
 
 def _chunk_document(title: str, text: str, suffix: str) -> list[Chunk]:
@@ -108,6 +135,7 @@ def ingest_file(
     vault_root = vault_root or VAULT_DIR
     relative_path = path.relative_to(vault_root).as_posix()
     fingerprint = compute_file_fingerprint(path)
+    source_metadata = _source_metadata(path)
     if not source_needs_ingest(metadata_path, relative_path, fingerprint):
         return 0
     previous_record = get_source_record(metadata_path, relative_path)
@@ -124,6 +152,11 @@ def ingest_file(
                 size_bytes=fingerprint.size_bytes,
                 modified_ns=fingerprint.modified_ns,
                 chunks=0,
+                mime_type=str(source_metadata["mime_type"]),
+                extension=str(source_metadata["extension"]),
+                parser_name=str(source_metadata["parser_name"]),
+                parser_version=str(source_metadata["parser_version"]),
+                index_version=int(source_metadata["index_version"]),
             ),
         )
         return 0
@@ -145,10 +178,15 @@ def ingest_file(
                     "dense": dense,
                     "sparse": models.Document(text=chunk.text, model="qdrant/bm25"),
                 },
-                payload={
+            payload={
                     "filename": path.name,
                     "path": relative_path,
                     "absolute_path": str(path.resolve()),
+                    "mime_type": source_metadata["mime_type"],
+                    "extension": source_metadata["extension"],
+                    "parser_name": source_metadata["parser_name"],
+                    "parser_version": source_metadata["parser_version"],
+                    "index_version": source_metadata["index_version"],
                     "heading": chunk.heading,
                     "chunk_index": chunk.index,
                     "content": chunk.text,
@@ -167,6 +205,11 @@ def ingest_file(
             size_bytes=fingerprint.size_bytes,
             modified_ns=fingerprint.modified_ns,
             chunks=len(points),
+            mime_type=str(source_metadata["mime_type"]),
+            extension=str(source_metadata["extension"]),
+            parser_name=str(source_metadata["parser_name"]),
+            parser_version=str(source_metadata["parser_version"]),
+            index_version=int(source_metadata["index_version"]),
         ),
     )
     return len(points)

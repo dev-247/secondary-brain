@@ -8,6 +8,7 @@ from unittest.mock import patch
 from qdrant_client import QdrantClient
 
 from scripts.ingest import ingest_vault
+from scripts.metadata import CURRENT_INDEX_VERSION, get_source_record
 from scripts.search import hybrid_search
 
 
@@ -126,6 +127,26 @@ class IncrementalIngestTests(unittest.TestCase):
         self.assertEqual(stats["chunks"], 1)
         self.assertEqual(stats["failed"], 1)
         self.assertEqual(stats["failed_files"], [{"path": "bad.md", "error": "broken parse"}])
+
+    def test_ingest_records_richer_source_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            vault = root / "vault"
+            metadata = root / "metadata.sqlite"
+            qdrant_path = root / "qdrant"
+            client = QdrantClient(path=str(qdrant_path))
+            vault.mkdir()
+            (vault / "alpha.md").write_text("# Alpha\n\nMetadata content.", encoding="utf-8")
+
+            self.run_isolated_ingest(vault, metadata, client)
+            record = get_source_record(metadata, "alpha.md")
+
+        self.assertIsNotNone(record)
+        self.assertEqual(record.mime_type, "text/markdown")
+        self.assertEqual(record.extension, ".md")
+        self.assertEqual(record.parser_name, "direct")
+        self.assertEqual(record.parser_version, "1")
+        self.assertEqual(record.index_version, CURRENT_INDEX_VERSION)
 
 
 if __name__ == "__main__":

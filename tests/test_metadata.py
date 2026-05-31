@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from scripts.metadata import (
+    CURRENT_INDEX_VERSION,
     SourceRecord,
     compute_file_fingerprint,
     delete_source_record,
@@ -47,6 +48,11 @@ class MetadataTests(unittest.TestCase):
                     size_bytes=fingerprint.size_bytes,
                     modified_ns=fingerprint.modified_ns,
                     chunks=2,
+                    mime_type="text/markdown",
+                    extension=".md",
+                    parser_name="direct",
+                    parser_version="1",
+                    index_version=CURRENT_INDEX_VERSION,
                 ),
             )
 
@@ -54,6 +60,11 @@ class MetadataTests(unittest.TestCase):
             record = get_source_record(db_path, "note.md")
             self.assertIsNotNone(record)
             self.assertEqual(record.chunks, 2)
+            self.assertEqual(record.mime_type, "text/markdown")
+            self.assertEqual(record.extension, ".md")
+            self.assertEqual(record.parser_name, "direct")
+            self.assertEqual(record.parser_version, "1")
+            self.assertEqual(record.index_version, CURRENT_INDEX_VERSION)
 
     def test_list_and_delete_source_records(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -67,6 +78,11 @@ class MetadataTests(unittest.TestCase):
                     size_bytes=10,
                     modified_ns=100,
                     chunks=1,
+                    mime_type="text/markdown",
+                    extension=".md",
+                    parser_name="direct",
+                    parser_version="1",
+                    index_version=CURRENT_INDEX_VERSION,
                 ),
             )
             mark_source_indexed(
@@ -77,6 +93,11 @@ class MetadataTests(unittest.TestCase):
                     size_bytes=20,
                     modified_ns=200,
                     chunks=2,
+                    mime_type="text/markdown",
+                    extension=".md",
+                    parser_name="direct",
+                    parser_version="1",
+                    index_version=CURRENT_INDEX_VERSION,
                 ),
             )
 
@@ -91,6 +112,30 @@ class MetadataTests(unittest.TestCase):
                 [record.path for record in list_source_records(db_path)],
                 ["beta.md"],
             )
+
+    def test_source_needs_ingest_when_index_version_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "metadata.sqlite"
+            source = Path(directory) / "note.md"
+            source.write_text("stable note", encoding="utf-8")
+            fingerprint = compute_file_fingerprint(source)
+            mark_source_indexed(
+                db_path,
+                SourceRecord(
+                    path="note.md",
+                    sha256=fingerprint.sha256,
+                    size_bytes=fingerprint.size_bytes,
+                    modified_ns=fingerprint.modified_ns,
+                    chunks=1,
+                    mime_type="text/markdown",
+                    extension=".md",
+                    parser_name="direct",
+                    parser_version="1",
+                    index_version=CURRENT_INDEX_VERSION - 1,
+                ),
+            )
+
+            self.assertTrue(source_needs_ingest(db_path, "note.md", fingerprint))
 
 
 if __name__ == "__main__":
