@@ -165,13 +165,13 @@ Target: 3-5 days
 - Replace keyword-overlap reranking with a stronger local or API reranker. In progress: reranking is now pluggable with weighted lexical and lexical-only strategies; heavier local/API rerankers remain optional.
 - Add retrieval diagnostics to show ranking details. In progress: result rank, final score, fused score, lexical score, citation, chunk, heading, path, and preview are available; separate dense/sparse prefetch rankings remain future polish.
 - Add commands for `eval` and `search --debug`. Done.
-- Track retrieval quality before and after ranking changes.
+- Track retrieval quality before and after ranking changes. In progress: latest eval JSON report is written to `reports/retrieval-eval-latest.json`.
 
 Exit criteria:
 
 - At least 10 evaluation questions exist. Done.
 - The system reports whether expected sources were retrieved. Done.
-- Retrieval changes are measured instead of guessed.
+- Retrieval changes are measured instead of guessed. In progress: eval reports capture recall and per-question ranks.
 
 ### Phase 3: Answer Quality and Trust
 

@@ -18,6 +18,7 @@ from scripts.search import hybrid_search
 
 DEFAULT_VAULT = ROOT / "tests" / "fixtures" / "smoke_vault"
 DEFAULT_CASES = ROOT / "tests" / "fixtures" / "smoke_queries.json"
+DEFAULT_REPORT = ROOT / "reports" / "retrieval-eval-latest.json"
 DEFAULT_COLLECTION = "second_brain_smoke"
 SMOKE_EMBED_DIMENSION = 4
 
@@ -67,6 +68,34 @@ class SmokeEvalResult:
         if not self.case_results:
             return 0.0
         return self.passed / len(self.case_results)
+
+
+def eval_report(result: SmokeEvalResult) -> dict[str, object]:
+    return {
+        "total": len(result.case_results),
+        "passed": result.passed,
+        "failed": result.failed,
+        "recall": result.recall,
+        "cases": [
+            {
+                "query": case_result.case.query,
+                "expected_path": case_result.case.expected_path,
+                "expected_rank_at_most": case_result.case.expected_rank_at_most,
+                "rank": case_result.rank,
+                "ok": case_result.ok,
+                "found_paths": case_result.found_paths,
+            }
+            for case_result in result.case_results
+        ],
+    }
+
+
+def save_eval_report(result: SmokeEvalResult, path: Path = DEFAULT_REPORT) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(eval_report(result), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def smoke_embedding(text: str) -> list[float]:
@@ -149,6 +178,7 @@ def run_smoke_eval(
 def print_smoke_eval(console: Console | None = None) -> int:
     console = console or Console()
     result = run_smoke_eval()
+    save_eval_report(result)
 
     table = Table(title="Smoke Retrieval Evaluation")
     table.add_column("Status")
@@ -171,6 +201,7 @@ def print_smoke_eval(console: Console | None = None) -> int:
         f"\nPassed {result.passed}/{len(result.case_results)} smoke retrieval cases "
         f"(recall@k: {result.recall:.0%})."
     )
+    console.print(f"Report written to {DEFAULT_REPORT}")
     return 0 if result.ok else 1
 
 

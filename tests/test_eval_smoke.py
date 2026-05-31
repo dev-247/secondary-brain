@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.eval_smoke import SmokeCase, load_cases, run_smoke_eval
+from scripts.eval_smoke import SmokeCase, SmokeCaseResult, SmokeEvalResult, load_cases, run_smoke_eval, save_eval_report
 
 
 def fake_embedding(text: str) -> list[float]:
@@ -68,6 +68,28 @@ class SmokeEvalTests(unittest.TestCase):
         self.assertEqual(result.passed, 2)
         self.assertEqual(result.failed, 0)
         self.assertEqual(result.recall, 1.0)
+
+    def test_save_eval_report_writes_stable_json(self) -> None:
+        result = SmokeEvalResult(
+            [
+                SmokeCaseResult(
+                    case=SmokeCase("What is alpha?", "alpha.md", 3),
+                    found_paths=["alpha.md", "beta.md"],
+                )
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / "eval-report.json"
+            save_eval_report(result, report_path)
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(report["passed"], 1)
+        self.assertEqual(report["failed"], 0)
+        self.assertEqual(report["total"], 1)
+        self.assertEqual(report["recall"], 1.0)
+        self.assertEqual(report["cases"][0]["rank"], 1)
+        self.assertEqual(report["cases"][0]["found_paths"], ["alpha.md", "beta.md"])
 
 
 if __name__ == "__main__":

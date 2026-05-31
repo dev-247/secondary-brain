@@ -44,6 +44,12 @@ Run the current retrieval evaluation benchmark:
 make eval
 ```
 
+The latest evaluation report is written to:
+
+```text
+reports/retrieval-eval-latest.json
+```
+
 Inspect search results without answer synthesis:
 
 ```bash
