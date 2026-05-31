@@ -80,14 +80,12 @@ Remaining installation work:
 ## Gaps
 
 - Project management:
-  - No git repository has been initialized.
-  - No dated roadmap existed before this file.
-  - No changelog, milestone tracking, or release checklist exists.
+  - Git, roadmap, development workflow, and release checklist now exist.
+  - A changelog is still optional future polish.
 
 - Validation:
-  - No automated tests existed before the current test baseline.
-  - No retrieval quality evaluation set exists.
-  - No smoke test documents and expected answers are defined.
+  - Automated tests and smoke retrieval fixtures exist.
+  - Retrieval quality evaluation is still small and should expand in Phase 2.
 
 - Product scope:
   - The spec mentions access from anywhere in the research reference, but the current implementation is CLI-only.
@@ -95,13 +93,12 @@ Remaining installation work:
   - There is no authentication, remote-access setup, or private-network deployment guide.
 
 - Data layer:
-  - There is no separate canonical metadata store such as SQLite.
-  - There is no index versioning, document deletion handling, or stale re-ingestion detection.
+  - SQLite source metadata, index versioning, stale reingestion, and deleted-file cleanup now exist.
   - There is no deduplication across files.
 
 - Retrieval quality:
   - Reranking is currently a simple keyword overlap heuristic.
-  - Citations point to file, heading, and chunk, but not page coordinates or paragraph anchors.
+  - Citations support file, heading, chunk, and page metadata when page markers are available.
   - There is no confidence scoring or source coverage summary.
 
 - Wiki/self-improvement:
@@ -138,7 +135,7 @@ Exit criteria:
 
 Target: 3-5 days
 
-- Add document fingerprints and skip unchanged files. In progress: basic SQLite metadata and unchanged-file skipping are implemented.
+- Add document fingerprints and skip unchanged files. Done.
 - Add delete/reindex behavior for removed or changed files. Done.
 - Store canonical metadata in SQLite. Done.
 - Improve citations for PDFs with page or section anchors where Docling exposes them. Done for page-aware citation plumbing; deeper Docling page extraction can be expanded with real PDF fixtures.
@@ -147,10 +144,17 @@ Target: 3-5 days
 
 Exit criteria:
 
-- Re-running ingest does not duplicate unchanged content. Basic behavior implemented.
+- Re-running ingest does not duplicate unchanged content. Done.
 - Changed and deleted files are reflected in the index. Done.
 - Every indexed chunk has durable source metadata. Done.
 - Failed files appear in a readable ingest report. Done.
+
+Phase 1 review on 2026-05-31:
+
+- `make smoke` passes with 23 tests.
+- The repo is clean.
+- The real local audit reports 3 indexed chunks.
+- Remaining ingestion polish is deduplication across files and deeper real-PDF page extraction, both deferred because Phase 2 retrieval quality work is now more valuable.
 
 ### Phase 2: Retrieval Quality and Evaluation
 
