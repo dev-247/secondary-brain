@@ -90,3 +90,31 @@ def format_citation(result: SearchResult) -> str:
     else:
         location = f"{result.path}#{result.heading}" if result.heading else result.path
     return f"{result.filename} ({location}, chunk {result.chunk_index})"
+
+
+def _preview(text: str, limit: int) -> str:
+    collapsed = " ".join(text.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[: max(0, limit - 3)].rstrip() + "..."
+
+
+def diagnostic_rows(
+    results: list[SearchResult],
+    *,
+    preview_chars: int = 120,
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for rank, result in enumerate(results, start=1):
+        rows.append(
+            {
+                "rank": str(rank),
+                "score": f"{result.score:.4f}",
+                "path": result.path,
+                "heading": result.heading,
+                "chunk": str(result.chunk_index),
+                "citation": format_citation(result),
+                "preview": _preview(result.content, preview_chars),
+            }
+        )
+    return rows

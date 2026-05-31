@@ -7,6 +7,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.table import Table
 
 from scripts.audit import audit_wiki, print_audit_report
 from scripts.config import VAULT_DIR, WIKI_DIR
@@ -14,7 +15,7 @@ from scripts.doctor import print_doctor_report
 from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
 from scripts.router import synthesize_answer
-from scripts.search import format_citation, hybrid_search
+from scripts.search import diagnostic_rows, format_citation, hybrid_search
 
 console = Console()
 
@@ -89,6 +90,40 @@ def cmd_ask(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_search(args: argparse.Namespace) -> int:
+    if not check_qdrant_health():
+        console.print("[red]Qdrant is not running. Start it with: docker compose up -d[/red]")
+        return 1
+
+    results = hybrid_search(args.query, limit=args.limit)
+    if not results:
+        console.print("[yellow]No information found in your knowledge base.[/yellow]")
+        return 0
+
+    table = Table(title="Search Diagnostics" if args.debug else "Search Results")
+    table.add_column("Rank", justify="right")
+    table.add_column("Score", justify="right")
+    table.add_column("Path")
+    table.add_column("Heading")
+    table.add_column("Chunk", justify="right")
+    table.add_column("Citation")
+    table.add_column("Preview")
+
+    for row in diagnostic_rows(results):
+        table.add_row(
+            row["rank"],
+            row["score"],
+            row["path"],
+            row["heading"],
+            row["chunk"],
+            row["citation"],
+            row["preview"],
+        )
+
+    console.print(table)
+    return 0
+
+
 def cmd_audit(_: argparse.Namespace) -> int:
     print_audit_report(audit_wiki())
     return 0
@@ -149,6 +184,12 @@ def build_parser() -> argparse.ArgumentParser:
     ask_parser.add_argument("--fast", action="store_true", help="Force local Ollama reasoning")
     ask_parser.add_argument("--limit", type=int, default=5, help="Number of source chunks to retrieve")
     ask_parser.set_defaults(func=cmd_ask)
+
+    search_parser = subparsers.add_parser("search", help="Search sources without synthesis")
+    search_parser.add_argument("query", help="Search query")
+    search_parser.add_argument("--limit", type=int, default=5, help="Number of chunks to retrieve")
+    search_parser.add_argument("--debug", action="store_true", help="Show diagnostic ranking details")
+    search_parser.set_defaults(func=cmd_search)
 
     audit_parser = subparsers.add_parser("audit", help="Run wiki health audit")
     audit_parser.set_defaults(func=cmd_audit)

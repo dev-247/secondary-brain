@@ -44,6 +44,12 @@ Run the current retrieval evaluation benchmark:
 make eval
 ```
 
+Inspect search results without answer synthesis:
+
+```bash
+uv run python main.py search "hybrid retrieval" --debug
+```
+
 Ingest the vault:
 
 ```bash
