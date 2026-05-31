@@ -13,6 +13,7 @@ from scripts.chunking import Chunk, chunk_markdown, chunk_plain_text
 from scripts.config import METADATA_DB_PATH, QDRANT_COLLECTION, SUPPORTED_EXTENSIONS, VAULT_DIR
 from scripts.embeddings import embed_text
 from scripts.metadata import (
+    get_source_record,
     SourceRecord,
     compute_file_fingerprint,
     mark_source_indexed,
@@ -70,6 +71,16 @@ def discover_files(root: Path | None = None) -> list[Path]:
     return files
 
 
+def delete_indexed_source(client: object, relative_path: str, chunks: int) -> None:
+    if chunks <= 0:
+        return
+    point_ids = [_point_id(relative_path, index) for index in range(chunks)]
+    client.delete(
+        collection_name=QDRANT_COLLECTION,
+        points_selector=models.PointIdsList(points=point_ids),
+    )
+
+
 def ingest_file(
     path: Path,
     vault_root: Path | None = None,
@@ -80,6 +91,7 @@ def ingest_file(
     fingerprint = compute_file_fingerprint(path)
     if not source_needs_ingest(metadata_path, relative_path, fingerprint):
         return 0
+    previous_record = get_source_record(metadata_path, relative_path)
 
     suffix = path.suffix.lower()
     title, text = _extract_text(path)
@@ -99,6 +111,9 @@ def ingest_file(
 
     client = get_client()
     ensure_collection(client)
+    if previous_record is not None:
+        delete_indexed_source(client, relative_path, previous_record.chunks)
+
     ingested_at = datetime.now(timezone.utc).isoformat()
     points: list[models.PointStruct] = []
 
