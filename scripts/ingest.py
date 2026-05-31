@@ -1,0 +1,140 @@
+from __future__ import annotations
+
+import hashlib
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+from qdrant_client import models
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
+
+from scripts.chunking import Chunk, chunk_markdown, chunk_plain_text
+from scripts.config import QDRANT_COLLECTION, SUPPORTED_EXTENSIONS, VAULT_DIR
+from scripts.embeddings import embed_text
+from scripts.qdrant_setup import check_qdrant_health, ensure_collection, get_client
+
+console = Console()
+
+
+def _point_id(source_path: str, chunk_index: int) -> str:
+    digest = hashlib.sha256(f"{source_path}:{chunk_index}".encode()).hexdigest()
+    return str(uuid.UUID(digest[:32]))
+
+
+def _extract_with_docling(path: Path) -> tuple[str, str]:
+    from docling.document_converter import DocumentConverter
+
+    converter = DocumentConverter()
+    result = converter.convert(str(path))
+    markdown = result.document.export_to_markdown()
+    title = path.stem.replace("_", " ").replace("-", " ").title()
+    return title, markdown
+
+
+def _extract_text(path: Path) -> tuple[str, str]:
+    suffix = path.suffix.lower()
+    if suffix in {".md", ".markdown", ".txt"}:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        title = path.stem.replace("_", " ").replace("-", " ").title()
+        return title, text
+    title, markdown = _extract_with_docling(path)
+    return title, markdown
+
+
+def _chunk_document(title: str, text: str, suffix: str) -> list[Chunk]:
+    if suffix in {".md", ".markdown"}:
+        return chunk_markdown(text)
+    if suffix == ".txt":
+        return chunk_plain_text(text, title=title)
+    if text.lstrip().startswith("#"):
+        return chunk_markdown(text)
+    return chunk_plain_text(text, title=title)
+
+
+def discover_files(root: Path | None = None) -> list[Path]:
+    root = root or VAULT_DIR
+    if not root.exists():
+        return []
+    files: list[Path] = []
+    for path in sorted(root.rglob("*")):
+        if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
+            if not path.name.startswith("."):
+                files.append(path)
+    return files
+
+
+def ingest_file(path: Path, vault_root: Path | None = None) -> int:
+    vault_root = vault_root or VAULT_DIR
+    relative_path = path.relative_to(vault_root).as_posix()
+    suffix = path.suffix.lower()
+    title, text = _extract_text(path)
+    chunks = _chunk_document(title, text, suffix)
+    if not chunks:
+        return 0
+
+    client = get_client()
+    ensure_collection(client)
+    ingested_at = datetime.now(timezone.utc).isoformat()
+    points: list[models.PointStruct] = []
+
+    for chunk in chunks:
+        dense = embed_text(chunk.text)
+        points.append(
+            models.PointStruct(
+                id=_point_id(relative_path, chunk.index),
+                vector={
+                    "dense": dense,
+                    "sparse": models.Document(text=chunk.text, model="qdrant/bm25"),
+                },
+                payload={
+                    "filename": path.name,
+                    "path": relative_path,
+                    "absolute_path": str(path.resolve()),
+                    "heading": chunk.heading,
+                    "chunk_index": chunk.index,
+                    "content": chunk.text,
+                    "title": title,
+                    "ingested_at": ingested_at,
+                },
+            )
+        )
+
+    client.upsert(collection_name=QDRANT_COLLECTION, points=points)
+    return len(points)
+
+
+def ingest_vault(root: Path | None = None) -> dict[str, int]:
+    if not check_qdrant_health():
+        raise RuntimeError(
+            "Qdrant is not reachable. Start Docker (docker compose up -d) "
+            "or set QDRANT_MODE=local in .env for embedded storage."
+        )
+
+    root = root or VAULT_DIR
+    root.mkdir(parents=True, exist_ok=True)
+    files = discover_files(root)
+    if not files:
+        console.print(f"[yellow]No supported files found in {root}[/yellow]")
+        return {"files": 0, "chunks": 0}
+
+    total_chunks = 0
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Ingesting vault...", total=len(files))
+        for path in files:
+            progress.update(task, description=f"Ingesting {path.name}")
+            total_chunks += ingest_file(path, vault_root=root)
+            progress.advance(task)
+
+    return {"files": len(files), "chunks": total_chunks}
+
+
+if __name__ == "__main__":
+    stats = ingest_vault()
+    console.print(
+        f"[green]Done.[/green] Ingested {stats['chunks']} chunks from {stats['files']} files."
+    )

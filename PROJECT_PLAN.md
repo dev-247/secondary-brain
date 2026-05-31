@@ -1,0 +1,263 @@
+# Second Brain Production Project Plan
+
+Last observed: 2026-05-31
+
+## Product Direction
+
+Build a production-grade, local-first hybrid second brain.
+
+The winning architecture is not only RAG, only wiki generation, or only graph memory. It is a layered system:
+
+```text
+Raw files = source of truth
+RAG = accurate retrieval and citations
+LLM wiki = organized long-term memory
+Graph layer = relationships, contradictions, timelines, and multi-hop insight
+Local LLM = private everyday assistant
+Cloud LLM = optional deep reasoning fallback
+```
+
+This keeps the system private and inspectable while still allowing high-quality reasoning when the user explicitly chooses it.
+
+## Current State
+
+This project is in an early working-prototype phase. The core local-first command-line path exists: files can be discovered from `vault/`, parsed, chunked, embedded, indexed into Qdrant, searched with dense plus sparse retrieval, and synthesized through either local Ollama or OpenRouter.
+
+The repository was initialized on 2026-05-31 so future work can be tracked with commits. There is no older commit history before that date.
+
+## Prerequisite Status
+
+Checked on 2026-05-31:
+
+| Prerequisite | Status | Notes |
+| --- | --- | --- |
+| `uv` | Installed | `uv 0.11.17` |
+| Python | Installed | `Python 3.14.5`; project requires `>=3.12` |
+| `.env` | Present | Local secrets/config file exists |
+| Qdrant | Ready | Embedded local mode works at `data/qdrant` |
+| Docker | Missing | `docker` command is not installed or not on `PATH`; not blocking embedded local mode |
+| Ollama CLI | Installed | Client is available |
+| Ollama models | Installed | `llama3.2`, `llama3.2:1b`, and `nomic-embed-text` are present |
+| OpenRouter key | Optional | Required only for deep cloud reasoning |
+| Tests | Passing | `uv run python -m unittest` passes 6 tests |
+
+Remaining installation work:
+
+- Install Docker Desktop only if we want Qdrant in server/container mode.
+- Keep Ollama running when using ingestion, search, or local chat.
+- Add an OpenRouter API key only if deep mode should call cloud LLMs.
+
+## Completed
+
+- Stage 1 infrastructure:
+  - `docker-compose.yml` defines Qdrant on ports 6333 and 6334.
+  - `vault/` and `wiki/` directories exist.
+  - Qdrant can run in Docker server mode or embedded local mode.
+
+- Stage 2 ingestion:
+  - `scripts/ingest.py` discovers supported files in the vault.
+  - Markdown and text files are read directly.
+  - PDF/image/docx extraction is routed through Docling.
+  - Chunks are stored with filename, path, heading, timestamp, and content payloads.
+
+- Stage 3 retrieval:
+  - `scripts/search.py` performs dense vector and sparse BM25 prefetch against Qdrant.
+  - Results are fused with reciprocal rank fusion.
+  - A simple lexical boost reranks returned chunks.
+
+- Stage 4 intelligence routing:
+  - `scripts/router.py` routes short/simple queries to local Ollama.
+  - Longer or analytical queries route to OpenRouter unless fast mode is forced.
+  - Prompt rules require answers to use retrieved context and cite sources.
+
+- Stage 5 CLI:
+  - `main.py` provides `status`, `ingest`, `ask`, `audit`, and `chat` commands.
+  - Empty retrieval returns "No information found in your knowledge base."
+
+- Audit:
+  - `scripts/audit.py` reports indexed chunks, wiki file count, and stale wiki files.
+
+## Gaps
+
+- Project management:
+  - No git repository has been initialized.
+  - No dated roadmap existed before this file.
+  - No changelog, milestone tracking, or release checklist exists.
+
+- Validation:
+  - No automated tests existed before the current test baseline.
+  - No retrieval quality evaluation set exists.
+  - No smoke test documents and expected answers are defined.
+
+- Product scope:
+  - The spec mentions access from anywhere in the research reference, but the current implementation is CLI-only.
+  - There is no browser/PWA/mobile interface yet.
+  - There is no authentication, remote-access setup, or private-network deployment guide.
+
+- Data layer:
+  - There is no separate canonical metadata store such as SQLite.
+  - There is no index versioning, document deletion handling, or stale re-ingestion detection.
+  - There is no deduplication across files.
+
+- Retrieval quality:
+  - Reranking is currently a simple keyword overlap heuristic.
+  - Citations point to file, heading, and chunk, but not page coordinates or paragraph anchors.
+  - There is no confidence scoring or source coverage summary.
+
+- Wiki/self-improvement:
+  - `wiki/` is present but no generation workflow writes summaries or articles.
+  - Contradiction detection is listed in the spec but not implemented.
+  - Topic suggestions are static and not based on vault analysis.
+
+- Operations:
+  - Ollama model availability is checked only when a request fails.
+  - There is no backup/sync guidance in runnable form.
+  - Docker health depends on the Qdrant image containing `curl`, which may be brittle.
+
+## Production Phases
+
+### Phase 0: Foundation and Baseline
+
+Target: 1-2 days
+
+- Initialize git and commit the baseline.
+- Keep deterministic unit tests passing.
+- Add a smoke test vault with known questions and expected source files.
+- Document required local services and model pulls.
+- Add a repeatable `make` or script-based developer workflow.
+- Define a release checklist for each phase.
+
+Exit criteria:
+
+- Fresh clone setup is documented.
+- Tests pass locally.
+- A smoke ingest/search test can be run repeatedly.
+- Baseline is committed.
+
+### Phase 1: Reliable Ingestion
+
+Target: 3-5 days
+
+- Add document fingerprints and skip unchanged files.
+- Add delete/reindex behavior for removed or changed files.
+- Store canonical metadata in SQLite.
+- Improve citations for PDFs with page or section anchors where Docling exposes them.
+- Track parse errors without stopping the entire ingest run.
+- Record source MIME type, size, modified time, hash, parser version, and index version.
+
+Exit criteria:
+
+- Re-running ingest does not duplicate unchanged content.
+- Changed and deleted files are reflected in the index.
+- Every indexed chunk has durable source metadata.
+- Failed files appear in a readable ingest report.
+
+### Phase 2: Retrieval Quality and Evaluation
+
+Target: 3-5 days
+
+- Build a small evaluation set of real user questions.
+- Measure recall of expected source chunks.
+- Replace keyword-overlap reranking with a stronger local or API reranker.
+- Add retrieval diagnostics to show dense, sparse, fused, and reranked scores.
+- Add commands for `eval` and `search --debug`.
+- Track retrieval quality before and after ranking changes.
+
+Exit criteria:
+
+- At least 10 evaluation questions exist.
+- The system reports whether expected sources were retrieved.
+- Retrieval changes are measured instead of guessed.
+
+### Phase 3: Answer Quality and Trust
+
+Target: 3-5 days
+
+- Strengthen prompt templates for grounded answers.
+- Add source coverage checks before synthesis.
+- Add confidence labels based on retrieval strength and source agreement.
+- Make abstention behavior consistent.
+- Add answer tests with mocked retrieval and mocked LLM responses.
+
+Exit criteria:
+
+- The system refuses weakly supported answers.
+- Every factual answer includes citations.
+- Local and cloud modes share the same trust rules.
+
+### Phase 4: LLM Wiki Memory
+
+Target: 1 week
+
+- Add a command to generate source summaries into `wiki/`.
+- Add stale-topic refresh suggestions based on indexed documents.
+- Add contradiction candidates using retrieved claims and cited excerpts.
+- Store generated wiki pages with citation blocks and review status.
+- Separate human-approved wiki pages from draft AI pages.
+
+Exit criteria:
+
+- The wiki becomes a browsable organized memory layer.
+- Generated pages cite original sources.
+- Draft pages are clearly marked as generated until reviewed.
+
+### Phase 5: Graph Memory and Higher-Level Insight
+
+Target: 1-2 weeks
+
+- Extract entities, topics, dates, projects, people, and relationships.
+- Build a local graph store or SQLite-backed graph tables.
+- Add graph-assisted questions such as "how are these ideas connected?"
+- Add contradiction, timeline, and dependency discovery.
+
+Exit criteria:
+
+- The graph layer improves relationship and multi-hop queries.
+- Graph facts link back to source chunks.
+- Wrong or low-confidence extracted relationships can be reviewed.
+
+### Phase 6: Product Interface and Access Anywhere
+
+Target: 1-2 weeks
+
+- Add a small API service around search and synthesis.
+- Build a browser-first UI.
+- Add private access guidance for Tailscale or equivalent.
+- Add authentication before any non-local exposure.
+- Add source viewer, chat history, wiki browser, and ingestion status.
+- Keep the first UI dense and useful rather than marketing-like.
+
+Exit criteria:
+
+- A user can ingest, search, ask, inspect citations, and browse wiki pages from a web UI.
+- Remote access is private by default.
+- No service is exposed publicly without authentication.
+
+### Phase 7: Production Operations
+
+Target: ongoing
+
+- Add backups for vault, metadata, Qdrant data, and wiki.
+- Add structured logs and health checks.
+- Add import/export tools.
+- Add package/install instructions.
+- Add security review for cloud calls and remote access.
+
+Exit criteria:
+
+- The system can be restored from backup.
+- Common failures have visible diagnostics.
+- Setup, upgrade, and recovery are documented.
+
+## Recommended Next Work
+
+The next best engineering move is Phase 0: stabilize the prototype. This makes the existing work trustworthy before expanding into UI, sync, wiki memory, or graph reasoning.
+
+Immediate checklist:
+
+- Run `uv run python -m unittest`.
+- Commit the baseline.
+- Add 5-10 representative files to `vault/`.
+- Create 10 evaluation questions with expected source citations.
+- Add a repeatable smoke command for status, ingest, ask, and audit.
+- Then improve ingestion freshness and retrieval diagnostics.
