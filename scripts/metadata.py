@@ -77,6 +77,38 @@ def get_source_record(db_path: Path, relative_path: str) -> SourceRecord | None:
     )
 
 
+def list_source_records(db_path: Path) -> list[SourceRecord]:
+    init_metadata_db(db_path)
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT path, sha256, size_bytes, modified_ns, chunks
+            FROM source_documents
+            ORDER BY path
+            """
+        ).fetchall()
+
+    return [
+        SourceRecord(
+            path=str(row[0]),
+            sha256=str(row[1]),
+            size_bytes=int(row[2]),
+            modified_ns=int(row[3]),
+            chunks=int(row[4]),
+        )
+        for row in rows
+    ]
+
+
+def delete_source_record(db_path: Path, relative_path: str) -> None:
+    init_metadata_db(db_path)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "DELETE FROM source_documents WHERE path = ?",
+            (relative_path,),
+        )
+
+
 def source_needs_ingest(
     db_path: Path,
     relative_path: str,

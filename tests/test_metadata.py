@@ -7,8 +7,10 @@ from pathlib import Path
 from scripts.metadata import (
     SourceRecord,
     compute_file_fingerprint,
+    delete_source_record,
     get_source_record,
     init_metadata_db,
+    list_source_records,
     mark_source_indexed,
     source_needs_ingest,
 )
@@ -52,6 +54,43 @@ class MetadataTests(unittest.TestCase):
             record = get_source_record(db_path, "note.md")
             self.assertIsNotNone(record)
             self.assertEqual(record.chunks, 2)
+
+    def test_list_and_delete_source_records(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "metadata.sqlite"
+            init_metadata_db(db_path)
+            mark_source_indexed(
+                db_path,
+                SourceRecord(
+                    path="alpha.md",
+                    sha256="alpha",
+                    size_bytes=10,
+                    modified_ns=100,
+                    chunks=1,
+                ),
+            )
+            mark_source_indexed(
+                db_path,
+                SourceRecord(
+                    path="beta.md",
+                    sha256="beta",
+                    size_bytes=20,
+                    modified_ns=200,
+                    chunks=2,
+                ),
+            )
+
+            self.assertEqual(
+                [record.path for record in list_source_records(db_path)],
+                ["alpha.md", "beta.md"],
+            )
+
+            delete_source_record(db_path, "alpha.md")
+
+            self.assertEqual(
+                [record.path for record in list_source_records(db_path)],
+                ["beta.md"],
+            )
 
 
 if __name__ == "__main__":

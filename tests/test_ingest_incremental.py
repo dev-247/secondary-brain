@@ -76,6 +76,31 @@ class IncrementalIngestTests(unittest.TestCase):
         self.assertEqual(second["chunks"], 1)
         self.assertTrue(all("BetaOnlyToken" not in result.content for result in results))
 
+    def test_deleted_file_removes_indexed_chunks_and_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            vault = root / "vault"
+            metadata = root / "metadata.sqlite"
+            qdrant_path = root / "qdrant"
+            client = QdrantClient(path=str(qdrant_path))
+            vault.mkdir()
+            note = vault / "alpha.md"
+            note.write_text("# Alpha\n\nDeleteOnlyToken should disappear.", encoding="utf-8")
+
+            first = self.run_isolated_ingest(vault, metadata, client)
+            note.unlink()
+            second = self.run_isolated_ingest(vault, metadata, client)
+
+            with patch("scripts.search.embed_text", side_effect=fake_embedding):
+                with patch("scripts.search.QDRANT_COLLECTION", "test_incremental"):
+                    with patch("scripts.search.get_client", return_value=client):
+                        results = hybrid_search("DeleteOnlyToken", limit=5)
+
+        self.assertEqual(first["chunks"], 1)
+        self.assertEqual(second["files"], 0)
+        self.assertEqual(second["deleted"], 1)
+        self.assertTrue(all("DeleteOnlyToken" not in result.content for result in results))
+
 
 if __name__ == "__main__":
     unittest.main()

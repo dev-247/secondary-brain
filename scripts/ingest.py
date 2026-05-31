@@ -13,7 +13,9 @@ from scripts.chunking import Chunk, chunk_markdown, chunk_plain_text
 from scripts.config import METADATA_DB_PATH, QDRANT_COLLECTION, SUPPORTED_EXTENSIONS, VAULT_DIR
 from scripts.embeddings import embed_text
 from scripts.metadata import (
+    delete_source_record,
     get_source_record,
+    list_source_records,
     SourceRecord,
     compute_file_fingerprint,
     mark_source_indexed,
@@ -79,6 +81,23 @@ def delete_indexed_source(client: object, relative_path: str, chunks: int) -> No
         collection_name=QDRANT_COLLECTION,
         points_selector=models.PointIdsList(points=point_ids),
     )
+
+
+def cleanup_deleted_sources(
+    *,
+    vault_root: Path,
+    indexed_paths: set[str],
+    metadata_path: Path,
+    client: object,
+) -> int:
+    deleted = 0
+    for record in list_source_records(metadata_path):
+        if record.path in indexed_paths:
+            continue
+        delete_indexed_source(client, record.path, record.chunks)
+        delete_source_record(metadata_path, record.path)
+        deleted += 1
+    return deleted
 
 
 def ingest_file(
@@ -166,9 +185,18 @@ def ingest_vault(
     root = root or VAULT_DIR
     root.mkdir(parents=True, exist_ok=True)
     files = discover_files(root)
+    indexed_paths = {path.relative_to(root).as_posix() for path in files}
+    client = get_client()
+    ensure_collection(client)
+    deleted = cleanup_deleted_sources(
+        vault_root=root,
+        indexed_paths=indexed_paths,
+        metadata_path=metadata_path,
+        client=client,
+    )
     if not files:
         console.print(f"[yellow]No supported files found in {root}[/yellow]")
-        return {"files": 0, "chunks": 0}
+        return {"files": 0, "chunks": 0, "skipped": 0, "deleted": deleted}
 
     total_chunks = 0
     skipped = 0
@@ -189,7 +217,7 @@ def ingest_vault(
             total_chunks += chunks
             progress.advance(task)
 
-    return {"files": len(files), "chunks": total_chunks, "skipped": skipped}
+    return {"files": len(files), "chunks": total_chunks, "skipped": skipped, "deleted": deleted}
 
 
 if __name__ == "__main__":
