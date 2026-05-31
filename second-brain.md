@@ -59,6 +59,23 @@ Build a privacy-first, local-running AI knowledge assistant that synthesizes doc
   - Logic: Search -> Context Retrieval -> LLM Synthesis -> Output.
   - Display: Show answer + clickable citation source.
 
+## 4.1 Development Workflow
+
+Use the project workflow files for production development:
+
+- `PREREQUISITES.md` explains required and optional local tools.
+- `DEVELOPMENT.md` lists daily commands.
+- `PROJECT_PLAN.md` tracks phase-by-phase production work.
+- `RELEASE_CHECKLIST.md` defines the phase completion checklist.
+
+Common commands:
+
+```bash
+make doctor
+make test
+make smoke
+```
+
 ## 5. Operational Rules for the Agent
 - **DO NOT** store API keys in the code (use `.env`).
 - **DO** verify Qdrant is running before initiating any ingest script.

@@ -39,7 +39,7 @@ Checked on 2026-05-31:
 | Ollama CLI | Installed | Client is available |
 | Ollama models | Installed | `llama3.2`, `llama3.2:1b`, and `nomic-embed-text` are present |
 | OpenRouter key | Optional | Required only for deep cloud reasoning |
-| Tests | Passing | `uv run python -m unittest` passes 6 tests |
+| Tests | Passing | `uv run python -m unittest` passes 9 tests |
 
 Remaining installation work:
 
@@ -120,12 +120,12 @@ Remaining installation work:
 
 Target: 1-2 days
 
-- Initialize git and commit the baseline.
-- Keep deterministic unit tests passing.
+- Initialize git and commit the baseline. Done.
+- Keep deterministic unit tests passing. Done.
 - Add a smoke test vault with known questions and expected source files.
-- Document required local services and model pulls.
-- Add a repeatable `make` or script-based developer workflow.
-- Define a release checklist for each phase.
+- Document required local services and model pulls. Done.
+- Add a repeatable `make` or script-based developer workflow. Done.
+- Define a release checklist for each phase. Done.
 
 Exit criteria:
 
@@ -255,9 +255,8 @@ The next best engineering move is Phase 0: stabilize the prototype. This makes t
 
 Immediate checklist:
 
-- Run `uv run python -m unittest`.
-- Commit the baseline.
+- Run `make smoke`.
 - Add 5-10 representative files to `vault/`.
 - Create 10 evaluation questions with expected source citations.
-- Add a repeatable smoke command for status, ingest, ask, and audit.
+- Add a smoke ingest/search check with known expected output.
 - Then improve ingestion freshness and retrieval diagnostics.

@@ -10,6 +10,7 @@ from rich.panel import Panel
 
 from scripts.audit import audit_wiki, print_audit_report
 from scripts.config import VAULT_DIR, WIKI_DIR
+from scripts.doctor import print_doctor_report
 from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
 from scripts.router import synthesize_answer
@@ -32,6 +33,10 @@ def cmd_status(_: argparse.Namespace) -> int:
         title="Second Brain Status",
     ))
     return 0 if qdrant_ok else 1
+
+
+def cmd_doctor(_: argparse.Namespace) -> int:
+    return print_doctor_report(console)
 
 
 def cmd_ingest(args: argparse.Namespace) -> int:
@@ -126,6 +131,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     status_parser = subparsers.add_parser("status", help="Check infrastructure status")
     status_parser.set_defaults(func=cmd_status)
+
+    doctor_parser = subparsers.add_parser("doctor", help="Check local prerequisites")
+    doctor_parser.set_defaults(func=cmd_doctor)
 
     ingest_parser = subparsers.add_parser("ingest", help="Ingest files from vault into Qdrant")
     ingest_parser.add_argument("--path", help="Vault directory (default: ./vault)")

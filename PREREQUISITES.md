@@ -47,6 +47,7 @@ Checked on 2026-05-31:
 - Docker is not currently installed or not on `PATH`.
 - Ollama models `nomic-embed-text`, `llama3.2`, and `llama3.2:1b` are installed.
 - Unit tests pass with `uv run python -m unittest`.
+- The full smoke workflow passes with `make smoke`.
 
 ## Validation Commands
 
