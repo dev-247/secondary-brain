@@ -1,0 +1,18 @@
+[
+  {
+    "query": "What is Project Alpha's main goal?",
+    "expected_path": "project-alpha.md"
+  },
+  {
+    "query": "What exercise habit is preferred in the health notes?",
+    "expected_path": "health-notes.md"
+  },
+  {
+    "query": "Why does hybrid retrieval matter?",
+    "expected_path": "ai-reading.md"
+  },
+  {
+    "query": "When should graph memory be added?",
+    "expected_path": "ai-reading.md"
+  }
+]

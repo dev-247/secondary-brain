@@ -32,6 +32,12 @@ Run the audit report:
 make audit
 ```
 
+Run deterministic retrieval smoke checks:
+
+```bash
+make smoke-retrieval
+```
+
 Ingest the vault:
 
 ```bash

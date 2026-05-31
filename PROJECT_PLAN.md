@@ -122,7 +122,7 @@ Target: 1-2 days
 
 - Initialize git and commit the baseline. Done.
 - Keep deterministic unit tests passing. Done.
-- Add a smoke test vault with known questions and expected source files.
+- Add a smoke test vault with known questions and expected source files. Done.
 - Document required local services and model pulls. Done.
 - Add a repeatable `make` or script-based developer workflow. Done.
 - Define a release checklist for each phase. Done.
@@ -256,7 +256,6 @@ The next best engineering move is Phase 0: stabilize the prototype. This makes t
 Immediate checklist:
 
 - Run `make smoke`.
-- Add 5-10 representative files to `vault/`.
-- Create 10 evaluation questions with expected source citations.
-- Add a smoke ingest/search check with known expected output.
+- Expand smoke retrieval from 4 fixture questions to 10 representative questions.
+- Add a smoke ingest/search check against a user-selected real vault subset.
 - Then improve ingestion freshness and retrieval diagnostics.

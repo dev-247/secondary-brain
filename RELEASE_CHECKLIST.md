@@ -5,6 +5,7 @@ Use this checklist at the end of every production phase.
 ## Required
 
 - `make smoke` passes.
+- Retrieval smoke cases pass.
 - `git status --short` shows only intentional changes.
 - New behavior has tests or a documented reason tests are not practical.
 - User-facing commands are documented.
