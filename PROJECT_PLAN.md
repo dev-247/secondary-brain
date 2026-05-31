@@ -162,7 +162,7 @@ Target: 3-5 days
 
 - Build a small evaluation set of real user questions. In progress: 10 fixture-backed evaluation questions exist.
 - Measure recall of expected source chunks. In progress: current deterministic benchmark reports recall@k.
-- Replace keyword-overlap reranking with a stronger local or API reranker.
+- Replace keyword-overlap reranking with a stronger local or API reranker. In progress: reranking is now pluggable with weighted lexical and lexical-only strategies; heavier local/API rerankers remain optional.
 - Add retrieval diagnostics to show ranking details. In progress: result rank, final score, fused score, lexical score, citation, chunk, heading, path, and preview are available; separate dense/sparse prefetch rankings remain future polish.
 - Add commands for `eval` and `search --debug`. Done.
 - Track retrieval quality before and after ranking changes.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
 from qdrant_client import models
 
@@ -24,6 +25,13 @@ class SearchResult:
     page_end: int | None = None
 
 
+class Reranker(Protocol):
+    name: str
+
+    def score(self, query: str, result: SearchResult) -> float:
+        ...
+
+
 def _keyword_overlap_score(query: str, content: str) -> float:
     query_terms = {term for term in query.lower().split() if len(term) > 2}
     if not query_terms:
@@ -33,13 +41,37 @@ def _keyword_overlap_score(query: str, content: str) -> float:
     return hits / len(query_terms)
 
 
-def rerank(query: str, results: list[SearchResult], limit: int = 5) -> list[SearchResult]:
-    for result in results:
+class WeightedLexicalReranker:
+    name = "weighted_lexical"
+
+    def score(self, query: str, result: SearchResult) -> float:
         lexical_boost = _keyword_overlap_score(query, result.content)
         result.lexical_score = lexical_boost
         if result.fused_score == 0.0:
             result.fused_score = result.score
-        result.score = (result.score * 0.85) + (lexical_boost * 0.15)
+        return (result.fused_score * 0.85) + (lexical_boost * 0.15)
+
+
+class LexicalOnlyReranker:
+    name = "lexical_only"
+
+    def score(self, query: str, result: SearchResult) -> float:
+        lexical_score = _keyword_overlap_score(query, result.content)
+        result.lexical_score = lexical_score
+        if result.fused_score == 0.0:
+            result.fused_score = result.score
+        return lexical_score
+
+
+def rerank(
+    query: str,
+    results: list[SearchResult],
+    limit: int = 5,
+    strategy: Reranker | None = None,
+) -> list[SearchResult]:
+    strategy = strategy or WeightedLexicalReranker()
+    for result in results:
+        result.score = strategy.score(query, result)
     ranked = sorted(results, key=lambda item: item.score, reverse=True)
     return ranked[:limit]
 
