@@ -18,6 +18,8 @@ class SearchResult:
     chunk_index: int
     score: float
     absolute_path: str = ""
+    page_start: int | None = None
+    page_end: int | None = None
 
 
 def _keyword_overlap_score(query: str, content: str) -> float:
@@ -59,6 +61,8 @@ def hybrid_search(query: str, limit: int = 5, prefetch_limit: int = 20) -> list[
     results: list[SearchResult] = []
     for point in response.points:
         payload = point.payload or {}
+        page_start = payload.get("page_start")
+        page_end = payload.get("page_end")
         results.append(
             SearchResult(
                 content=str(payload.get("content", "")),
@@ -68,6 +72,8 @@ def hybrid_search(query: str, limit: int = 5, prefetch_limit: int = 20) -> list[
                 chunk_index=int(payload.get("chunk_index", 0)),
                 score=float(point.score or 0.0),
                 absolute_path=str(payload.get("absolute_path", "")),
+                page_start=int(page_start) if page_start is not None else None,
+                page_end=int(page_end) if page_end is not None else None,
             )
         )
 
@@ -75,5 +81,12 @@ def hybrid_search(query: str, limit: int = 5, prefetch_limit: int = 20) -> list[
 
 
 def format_citation(result: SearchResult) -> str:
-    location = f"{result.path}#{result.heading}" if result.heading else result.path
+    if result.page_start is not None:
+        if result.page_end is not None and result.page_end != result.page_start:
+            page_label = f"pages {result.page_start}-{result.page_end}"
+        else:
+            page_label = f"page {result.page_start}"
+        location = f"{result.path}, {page_label}"
+    else:
+        location = f"{result.path}#{result.heading}" if result.heading else result.path
     return f"{result.filename} ({location}, chunk {result.chunk_index})"

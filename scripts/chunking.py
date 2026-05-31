@@ -12,37 +12,78 @@ class Chunk:
     text: str
     heading: str
     index: int
+    page_start: int | None = None
+    page_end: int | None = None
 
 
 def chunk_markdown(text: str) -> list[Chunk]:
-    sections: list[tuple[str, str]] = []
+    sections: list[tuple[str, str, int | None, int | None]] = []
     current_heading = "Document"
     current_lines: list[str] = []
+    current_page: int | None = None
+    section_page_start: int | None = None
+    section_page_end: int | None = None
 
     for line in text.splitlines():
+        page_match = re.match(r"^<!--\s*page:\s*(\d+)\s*-->$", line.strip(), re.IGNORECASE)
+        if page_match:
+            current_page = int(page_match.group(1))
+            if section_page_start is None:
+                section_page_start = current_page
+            section_page_end = current_page
+            continue
+
         heading_match = re.match(r"^(#{1,6})\s+(.+)$", line)
         if heading_match:
             if current_lines:
-                sections.append((current_heading, "\n".join(current_lines).strip()))
+                sections.append(
+                    (
+                        current_heading,
+                        "\n".join(current_lines).strip(),
+                        section_page_start,
+                        section_page_end,
+                    )
+                )
             current_heading = heading_match.group(2).strip()
             current_lines = [line]
+            section_page_start = current_page
+            section_page_end = current_page
         else:
             current_lines.append(line)
+            if current_page is not None:
+                if section_page_start is None:
+                    section_page_start = current_page
+                section_page_end = current_page
 
     if current_lines:
-        sections.append((current_heading, "\n".join(current_lines).strip()))
+        sections.append(
+            (
+                current_heading,
+                "\n".join(current_lines).strip(),
+                section_page_start,
+                section_page_end,
+            )
+        )
 
     if not sections:
-        sections = [("Document", text.strip())]
+        sections = [("Document", text.strip(), None, None)]
 
     chunks: list[Chunk] = []
     chunk_index = 0
 
-    for heading, body in sections:
+    for heading, body, page_start, page_end in sections:
         if not body:
             continue
         if len(body) <= MAX_CHUNK_CHARS:
-            chunks.append(Chunk(text=body, heading=heading, index=chunk_index))
+            chunks.append(
+                Chunk(
+                    text=body,
+                    heading=heading,
+                    index=chunk_index,
+                    page_start=page_start,
+                    page_end=page_end,
+                )
+            )
             chunk_index += 1
             continue
 
@@ -57,12 +98,28 @@ def chunk_markdown(text: str) -> list[Chunk]:
                 buffer = candidate
                 continue
             if buffer and len(buffer) >= MIN_CHUNK_CHARS:
-                chunks.append(Chunk(text=buffer, heading=heading, index=chunk_index))
+                chunks.append(
+                    Chunk(
+                        text=buffer,
+                        heading=heading,
+                        index=chunk_index,
+                        page_start=page_start,
+                        page_end=page_end,
+                    )
+                )
                 chunk_index += 1
             buffer = paragraph
 
         if buffer:
-            chunks.append(Chunk(text=buffer, heading=heading, index=chunk_index))
+            chunks.append(
+                Chunk(
+                    text=buffer,
+                    heading=heading,
+                    index=chunk_index,
+                    page_start=page_start,
+                    page_end=page_end,
+                )
+            )
             chunk_index += 1
 
     return chunks

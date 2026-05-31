@@ -188,6 +188,8 @@ def ingest_file(
                     "parser_version": source_metadata["parser_version"],
                     "index_version": source_metadata["index_version"],
                     "heading": chunk.heading,
+                    "page_start": chunk.page_start,
+                    "page_end": chunk.page_end,
                     "chunk_index": chunk.index,
                     "content": chunk.text,
                     "title": title,

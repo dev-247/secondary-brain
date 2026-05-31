@@ -25,6 +25,13 @@ class ChunkingTests(unittest.TestCase):
     def test_empty_plain_text_returns_no_chunks(self) -> None:
         self.assertEqual(chunk_plain_text("   \n\n", title="Empty"), [])
 
+    def test_markdown_page_markers_attach_page_metadata(self) -> None:
+        chunks = chunk_markdown("<!-- page: 7 -->\n# Alpha\n\nPage-specific note.")
+
+        self.assertEqual(chunks[0].page_start, 7)
+        self.assertEqual(chunks[0].page_end, 7)
+        self.assertNotIn("<!-- page", chunks[0].text)
+
 
 if __name__ == "__main__":
     unittest.main()
