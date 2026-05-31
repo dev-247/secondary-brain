@@ -138,7 +138,7 @@ Exit criteria:
 
 Target: 3-5 days
 
-- Add document fingerprints and skip unchanged files.
+- Add document fingerprints and skip unchanged files. In progress: basic SQLite metadata and unchanged-file skipping are implemented.
 - Add delete/reindex behavior for removed or changed files.
 - Store canonical metadata in SQLite.
 - Improve citations for PDFs with page or section anchors where Docling exposes them.
@@ -147,7 +147,7 @@ Target: 3-5 days
 
 Exit criteria:
 
-- Re-running ingest does not duplicate unchanged content.
+- Re-running ingest does not duplicate unchanged content. Basic behavior implemented.
 - Changed and deleted files are reflected in the index.
 - Every indexed chunk has durable source metadata.
 - Failed files appear in a readable ingest report.

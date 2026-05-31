@@ -66,6 +66,8 @@ The project should always have:
 
 Embedded Qdrant mode works without Docker and stores data under `data/qdrant`.
 
+Source indexing metadata is stored under `data/metadata.sqlite` by default. The metadata database tracks source file hashes so unchanged files can be skipped on later ingest runs.
+
 Docker Qdrant mode is optional. Use it when Docker Desktop is installed:
 
 ```bash

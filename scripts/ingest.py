@@ -10,8 +10,14 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from scripts.chunking import Chunk, chunk_markdown, chunk_plain_text
-from scripts.config import QDRANT_COLLECTION, SUPPORTED_EXTENSIONS, VAULT_DIR
+from scripts.config import METADATA_DB_PATH, QDRANT_COLLECTION, SUPPORTED_EXTENSIONS, VAULT_DIR
 from scripts.embeddings import embed_text
+from scripts.metadata import (
+    SourceRecord,
+    compute_file_fingerprint,
+    mark_source_indexed,
+    source_needs_ingest,
+)
 from scripts.qdrant_setup import check_qdrant_health, ensure_collection, get_client
 
 console = Console()
@@ -64,13 +70,31 @@ def discover_files(root: Path | None = None) -> list[Path]:
     return files
 
 
-def ingest_file(path: Path, vault_root: Path | None = None) -> int:
+def ingest_file(
+    path: Path,
+    vault_root: Path | None = None,
+    metadata_path: Path = METADATA_DB_PATH,
+) -> int:
     vault_root = vault_root or VAULT_DIR
     relative_path = path.relative_to(vault_root).as_posix()
+    fingerprint = compute_file_fingerprint(path)
+    if not source_needs_ingest(metadata_path, relative_path, fingerprint):
+        return 0
+
     suffix = path.suffix.lower()
     title, text = _extract_text(path)
     chunks = _chunk_document(title, text, suffix)
     if not chunks:
+        mark_source_indexed(
+            metadata_path,
+            SourceRecord(
+                path=relative_path,
+                sha256=fingerprint.sha256,
+                size_bytes=fingerprint.size_bytes,
+                modified_ns=fingerprint.modified_ns,
+                chunks=0,
+            ),
+        )
         return 0
 
     client = get_client()
@@ -101,10 +125,23 @@ def ingest_file(path: Path, vault_root: Path | None = None) -> int:
         )
 
     client.upsert(collection_name=QDRANT_COLLECTION, points=points)
+    mark_source_indexed(
+        metadata_path,
+        SourceRecord(
+            path=relative_path,
+            sha256=fingerprint.sha256,
+            size_bytes=fingerprint.size_bytes,
+            modified_ns=fingerprint.modified_ns,
+            chunks=len(points),
+        ),
+    )
     return len(points)
 
 
-def ingest_vault(root: Path | None = None) -> dict[str, int]:
+def ingest_vault(
+    root: Path | None = None,
+    metadata_path: Path = METADATA_DB_PATH,
+) -> dict[str, int]:
     if not check_qdrant_health():
         raise RuntimeError(
             "Qdrant is not reachable. Start Docker (docker compose up -d) "
@@ -119,6 +156,7 @@ def ingest_vault(root: Path | None = None) -> dict[str, int]:
         return {"files": 0, "chunks": 0}
 
     total_chunks = 0
+    skipped = 0
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -127,10 +165,16 @@ def ingest_vault(root: Path | None = None) -> dict[str, int]:
         task = progress.add_task("Ingesting vault...", total=len(files))
         for path in files:
             progress.update(task, description=f"Ingesting {path.name}")
-            total_chunks += ingest_file(path, vault_root=root)
+            chunks = ingest_file(path, vault_root=root, metadata_path=metadata_path)
+            if chunks == 0:
+                relative_path = path.relative_to(root).as_posix()
+                fingerprint = compute_file_fingerprint(path)
+                if not source_needs_ingest(metadata_path, relative_path, fingerprint):
+                    skipped += 1
+            total_chunks += chunks
             progress.advance(task)
 
-    return {"files": len(files), "chunks": total_chunks}
+    return {"files": len(files), "chunks": total_chunks, "skipped": skipped}
 
 
 if __name__ == "__main__":

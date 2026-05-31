@@ -5,6 +5,8 @@ This project can run in two modes:
 - Embedded local mode: Qdrant stores data under `data/qdrant`. This works without Docker.
 - Server mode: Qdrant runs through Docker Compose. This requires Docker Desktop or another Docker runtime.
 
+The default local metadata database is `data/metadata.sqlite`.
+
 ## Required
 
 - macOS or Linux

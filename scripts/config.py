@@ -18,6 +18,7 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "second_brain")
 QDRANT_PATH = _path("QDRANT_PATH", "data/qdrant")
+METADATA_DB_PATH = _path("METADATA_DB_PATH", "data/metadata.sqlite")
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")

@@ -91,7 +91,10 @@ def _run_with_isolated_qdrant(
                                         with patch("scripts.ingest.embed_text", side_effect=smoke_embedding):
                                             with patch("scripts.search.embed_text", side_effect=smoke_embedding):
                                                 with redirect_stdout(StringIO()):
-                                                    ingest_vault(vault_root)
+                                                    ingest_vault(
+                                                        vault_root,
+                                                        metadata_path=qdrant_path.parent / "metadata.sqlite",
+                                                    )
                                                 case_results: list[SmokeCaseResult] = []
                                                 for case in cases:
                                                     results = hybrid_search(case.query, limit=3)
