@@ -103,6 +103,9 @@ def cmd_search(args: argparse.Namespace) -> int:
     table = Table(title="Search Diagnostics" if args.debug else "Search Results")
     table.add_column("Rank", justify="right")
     table.add_column("Score", justify="right")
+    if args.debug:
+        table.add_column("Fused", justify="right")
+        table.add_column("Lexical", justify="right")
     table.add_column("Path")
     table.add_column("Heading")
     table.add_column("Chunk", justify="right")
@@ -110,15 +113,28 @@ def cmd_search(args: argparse.Namespace) -> int:
     table.add_column("Preview")
 
     for row in diagnostic_rows(results):
-        table.add_row(
-            row["rank"],
-            row["score"],
-            row["path"],
-            row["heading"],
-            row["chunk"],
-            row["citation"],
-            row["preview"],
-        )
+        if args.debug:
+            table.add_row(
+                row["rank"],
+                row["score"],
+                row["fused_score"],
+                row["lexical_score"],
+                row["path"],
+                row["heading"],
+                row["chunk"],
+                row["citation"],
+                row["preview"],
+            )
+        else:
+            table.add_row(
+                row["rank"],
+                row["score"],
+                row["path"],
+                row["heading"],
+                row["chunk"],
+                row["citation"],
+                row["preview"],
+            )
 
     console.print(table)
     return 0

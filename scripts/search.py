@@ -17,6 +17,8 @@ class SearchResult:
     heading: str
     chunk_index: int
     score: float
+    fused_score: float = 0.0
+    lexical_score: float = 0.0
     absolute_path: str = ""
     page_start: int | None = None
     page_end: int | None = None
@@ -34,6 +36,9 @@ def _keyword_overlap_score(query: str, content: str) -> float:
 def rerank(query: str, results: list[SearchResult], limit: int = 5) -> list[SearchResult]:
     for result in results:
         lexical_boost = _keyword_overlap_score(query, result.content)
+        result.lexical_score = lexical_boost
+        if result.fused_score == 0.0:
+            result.fused_score = result.score
         result.score = (result.score * 0.85) + (lexical_boost * 0.15)
     ranked = sorted(results, key=lambda item: item.score, reverse=True)
     return ranked[:limit]
@@ -71,6 +76,7 @@ def hybrid_search(query: str, limit: int = 5, prefetch_limit: int = 20) -> list[
                 heading=str(payload.get("heading", "")),
                 chunk_index=int(payload.get("chunk_index", 0)),
                 score=float(point.score or 0.0),
+                fused_score=float(point.score or 0.0),
                 absolute_path=str(payload.get("absolute_path", "")),
                 page_start=int(page_start) if page_start is not None else None,
                 page_end=int(page_end) if page_end is not None else None,
@@ -110,6 +116,8 @@ def diagnostic_rows(
             {
                 "rank": str(rank),
                 "score": f"{result.score:.4f}",
+                "fused_score": f"{result.fused_score:.4f}",
+                "lexical_score": f"{result.lexical_score:.4f}",
                 "path": result.path,
                 "heading": result.heading,
                 "chunk": str(result.chunk_index),

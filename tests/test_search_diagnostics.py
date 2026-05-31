@@ -16,6 +16,8 @@ class SearchDiagnosticsTests(unittest.TestCase):
                     heading="Ideas",
                     chunk_index=3,
                     score=0.812345,
+                    fused_score=0.7,
+                    lexical_score=0.45,
                 )
             ],
             preview_chars=24,
@@ -27,6 +29,8 @@ class SearchDiagnosticsTests(unittest.TestCase):
                 {
                     "rank": "1",
                     "score": "0.8123",
+                    "fused_score": "0.7000",
+                    "lexical_score": "0.4500",
                     "path": "note.md",
                     "heading": "Ideas",
                     "chunk": "3",
