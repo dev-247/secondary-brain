@@ -48,8 +48,12 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         return 1
 
     console.print(
-        f"[green]Ingested {stats['chunks']} chunks from {stats['files']} files.[/green]"
+        f"[green]Ingested {stats['chunks']} chunks from {stats['files']} files.[/green] "
+        f"Skipped {stats.get('skipped', 0)}, deleted {stats.get('deleted', 0)}, "
+        f"failed {stats.get('failed', 0)}."
     )
+    for failed_file in stats.get("failed_files", []):
+        console.print(f"[yellow]Failed[/yellow] {failed_file['path']}: {failed_file['error']}")
     return 0
 
 

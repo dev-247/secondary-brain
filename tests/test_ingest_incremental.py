@@ -101,6 +101,32 @@ class IncrementalIngestTests(unittest.TestCase):
         self.assertEqual(second["deleted"], 1)
         self.assertTrue(all("DeleteOnlyToken" not in result.content for result in results))
 
+    def test_failed_file_does_not_stop_remaining_ingest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            vault = root / "vault"
+            metadata = root / "metadata.sqlite"
+            qdrant_path = root / "qdrant"
+            client = QdrantClient(path=str(qdrant_path))
+            vault.mkdir()
+            good = vault / "good.md"
+            bad = vault / "bad.md"
+            good.write_text("# Good\n\nThis file should ingest.", encoding="utf-8")
+            bad.write_text("# Bad\n\nThis file should fail.", encoding="utf-8")
+
+            def extract_or_fail(path: Path) -> tuple[str, str]:
+                if path.name == "bad.md":
+                    raise ValueError("broken parse")
+                return "Good", path.read_text(encoding="utf-8")
+
+            with patch("scripts.ingest._extract_text", side_effect=extract_or_fail):
+                stats = self.run_isolated_ingest(vault, metadata, client)
+
+        self.assertEqual(stats["files"], 2)
+        self.assertEqual(stats["chunks"], 1)
+        self.assertEqual(stats["failed"], 1)
+        self.assertEqual(stats["failed_files"], [{"path": "bad.md", "error": "broken parse"}])
+
 
 if __name__ == "__main__":
     unittest.main()

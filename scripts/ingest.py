@@ -196,10 +196,18 @@ def ingest_vault(
     )
     if not files:
         console.print(f"[yellow]No supported files found in {root}[/yellow]")
-        return {"files": 0, "chunks": 0, "skipped": 0, "deleted": deleted}
+        return {
+            "files": 0,
+            "chunks": 0,
+            "skipped": 0,
+            "deleted": deleted,
+            "failed": 0,
+            "failed_files": [],
+        }
 
     total_chunks = 0
     skipped = 0
+    failed_files: list[dict[str, str]] = []
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -208,16 +216,29 @@ def ingest_vault(
         task = progress.add_task("Ingesting vault...", total=len(files))
         for path in files:
             progress.update(task, description=f"Ingesting {path.name}")
-            chunks = ingest_file(path, vault_root=root, metadata_path=metadata_path)
+            relative_path = path.relative_to(root).as_posix()
+            try:
+                chunks = ingest_file(path, vault_root=root, metadata_path=metadata_path)
+            except Exception as exc:
+                failed_files.append({"path": relative_path, "error": str(exc)})
+                progress.advance(task)
+                continue
+
             if chunks == 0:
-                relative_path = path.relative_to(root).as_posix()
                 fingerprint = compute_file_fingerprint(path)
                 if not source_needs_ingest(metadata_path, relative_path, fingerprint):
                     skipped += 1
             total_chunks += chunks
             progress.advance(task)
 
-    return {"files": len(files), "chunks": total_chunks, "skipped": skipped, "deleted": deleted}
+    return {
+        "files": len(files),
+        "chunks": total_chunks,
+        "skipped": skipped,
+        "deleted": deleted,
+        "failed": len(failed_files),
+        "failed_files": failed_files,
+    }
 
 
 if __name__ == "__main__":
