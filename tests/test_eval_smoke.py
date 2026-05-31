@@ -26,13 +26,31 @@ class SmokeEvalTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            self.assertEqual(load_cases(path), [SmokeCase("What is alpha?", "alpha.md")])
+            self.assertEqual(load_cases(path), [SmokeCase("What is alpha?", "alpha.md", 3)])
+
+    def test_load_cases_accepts_expected_rank(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "cases.json"
+            path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "query": "What is alpha?",
+                            "expected_path": "alpha.md",
+                            "expected_rank_at_most": 1,
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(load_cases(path), [SmokeCase("What is alpha?", "alpha.md", 1)])
 
     def test_smoke_eval_finds_expected_sources(self) -> None:
         fixture_root = Path(__file__).parent / "fixtures" / "smoke_vault"
         cases = [
-            SmokeCase("What is Project Alpha's main goal?", "project-alpha.md"),
-            SmokeCase("What exercise habit is preferred in the health notes?", "health-notes.md"),
+            SmokeCase("What is Project Alpha's main goal?", "project-alpha.md", 3),
+            SmokeCase("What exercise habit is preferred in the health notes?", "health-notes.md", 3),
         ]
 
         with tempfile.TemporaryDirectory() as directory:
@@ -49,6 +67,7 @@ class SmokeEvalTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(result.passed, 2)
         self.assertEqual(result.failed, 0)
+        self.assertEqual(result.recall, 1.0)
 
 
 if __name__ == "__main__":

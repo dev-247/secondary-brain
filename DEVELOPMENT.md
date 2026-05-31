@@ -38,6 +38,12 @@ Run deterministic retrieval smoke checks:
 make smoke-retrieval
 ```
 
+Run the current retrieval evaluation benchmark:
+
+```bash
+make eval
+```
+
 Ingest the vault:
 
 ```bash

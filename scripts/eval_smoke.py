@@ -26,6 +26,7 @@ SMOKE_EMBED_DIMENSION = 4
 class SmokeCase:
     query: str
     expected_path: str
+    expected_rank_at_most: int = 3
 
 
 @dataclass(frozen=True)
@@ -34,8 +35,15 @@ class SmokeCaseResult:
     found_paths: list[str]
 
     @property
+    def rank(self) -> int | None:
+        try:
+            return self.found_paths.index(self.case.expected_path) + 1
+        except ValueError:
+            return None
+
+    @property
     def ok(self) -> bool:
-        return self.case.expected_path in self.found_paths
+        return self.rank is not None and self.rank <= self.case.expected_rank_at_most
 
 
 @dataclass(frozen=True)
@@ -54,6 +62,12 @@ class SmokeEvalResult:
     def ok(self) -> bool:
         return self.failed == 0
 
+    @property
+    def recall(self) -> float:
+        if not self.case_results:
+            return 0.0
+        return self.passed / len(self.case_results)
+
 
 def smoke_embedding(text: str) -> list[float]:
     buckets = [0.0] * SMOKE_EMBED_DIMENSION
@@ -66,7 +80,11 @@ def smoke_embedding(text: str) -> list[float]:
 def load_cases(path: Path = DEFAULT_CASES) -> list[SmokeCase]:
     raw_cases = json.loads(path.read_text(encoding="utf-8"))
     return [
-        SmokeCase(query=str(item["query"]), expected_path=str(item["expected_path"]))
+        SmokeCase(
+            query=str(item["query"]),
+            expected_path=str(item["expected_path"]),
+            expected_rank_at_most=int(item.get("expected_rank_at_most", 3)),
+        )
         for item in raw_cases
     ]
 
@@ -136,6 +154,7 @@ def print_smoke_eval(console: Console | None = None) -> int:
     table.add_column("Status")
     table.add_column("Query", style="cyan")
     table.add_column("Expected")
+    table.add_column("Rank")
     table.add_column("Found")
 
     for case_result in result.case_results:
@@ -143,11 +162,15 @@ def print_smoke_eval(console: Console | None = None) -> int:
             "[green]pass[/green]" if case_result.ok else "[red]fail[/red]",
             case_result.case.query,
             case_result.case.expected_path,
+            str(case_result.rank or "miss"),
             ", ".join(case_result.found_paths) or "none",
         )
 
     console.print(table)
-    console.print(f"\nPassed {result.passed}/{len(result.case_results)} smoke retrieval cases.")
+    console.print(
+        f"\nPassed {result.passed}/{len(result.case_results)} smoke retrieval cases "
+        f"(recall@k: {result.recall:.0%})."
+    )
     return 0 if result.ok else 1
 
 

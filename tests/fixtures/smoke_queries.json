@@ -1,18 +1,52 @@
 [
   {
     "query": "What is Project Alpha's main goal?",
-    "expected_path": "project-alpha.md"
+    "expected_path": "project-alpha.md",
+    "expected_rank_at_most": 3
   },
   {
     "query": "What exercise habit is preferred in the health notes?",
-    "expected_path": "health-notes.md"
+    "expected_path": "health-notes.md",
+    "expected_rank_at_most": 3
   },
   {
     "query": "Why does hybrid retrieval matter?",
-    "expected_path": "ai-reading.md"
+    "expected_path": "ai-reading.md",
+    "expected_rank_at_most": 3
   },
   {
     "query": "When should graph memory be added?",
-    "expected_path": "ai-reading.md"
+    "expected_path": "ai-reading.md",
+    "expected_rank_at_most": 3
+  },
+  {
+    "query": "Should canonical documents stay local by default?",
+    "expected_path": "project-alpha.md",
+    "expected_rank_at_most": 3
+  },
+  {
+    "query": "Are cloud language models required or optional?",
+    "expected_path": "project-alpha.md",
+    "expected_rank_at_most": 3
+  },
+  {
+    "query": "What does the wellness routine emphasize in the morning?",
+    "expected_path": "health-notes.md",
+    "expected_rank_at_most": 3
+  },
+  {
+    "query": "Are the health notes medical advice?",
+    "expected_path": "health-notes.md",
+    "expected_rank_at_most": 3
+  },
+  {
+    "query": "What does semantic vector search combine with in hybrid retrieval?",
+    "expected_path": "ai-reading.md",
+    "expected_rank_at_most": 3
+  },
+  {
+    "query": "What kinds of questions should graph memory help with?",
+    "expected_path": "ai-reading.md",
+    "expected_rank_at_most": 3
   }
 ]

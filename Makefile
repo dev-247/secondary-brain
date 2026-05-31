@@ -1,4 +1,4 @@
-.PHONY: audit chat compile doctor ingest smoke smoke-retrieval status test
+.PHONY: audit chat compile doctor eval ingest smoke smoke-retrieval status test
 
 PYTHON := uv run python
 
@@ -19,6 +19,8 @@ audit:
 
 smoke-retrieval:
 	$(PYTHON) -m scripts.eval_smoke
+
+eval: smoke-retrieval
 
 ingest:
 	$(PYTHON) main.py ingest

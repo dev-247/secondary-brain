@@ -160,17 +160,17 @@ Phase 1 review on 2026-05-31:
 
 Target: 3-5 days
 
-- Build a small evaluation set of real user questions.
-- Measure recall of expected source chunks.
+- Build a small evaluation set of real user questions. In progress: 10 fixture-backed evaluation questions exist.
+- Measure recall of expected source chunks. In progress: current deterministic benchmark reports recall@k.
 - Replace keyword-overlap reranking with a stronger local or API reranker.
 - Add retrieval diagnostics to show dense, sparse, fused, and reranked scores.
-- Add commands for `eval` and `search --debug`.
+- Add commands for `eval` and `search --debug`. In progress: `make eval` exists; `search --debug` remains.
 - Track retrieval quality before and after ranking changes.
 
 Exit criteria:
 
-- At least 10 evaluation questions exist.
-- The system reports whether expected sources were retrieved.
+- At least 10 evaluation questions exist. Done.
+- The system reports whether expected sources were retrieved. Done.
 - Retrieval changes are measured instead of guessed.
 
 ### Phase 3: Answer Quality and Trust
