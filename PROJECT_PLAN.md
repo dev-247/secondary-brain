@@ -211,7 +211,7 @@ Phase 3 review on 2026-06-01:
 Target: 1 week
 
 - Add a command to generate source summaries into `wiki/`. In progress: deterministic cited draft generation is available with `wiki-generate`.
-- Add stale-topic refresh suggestions based on indexed documents.
+- Add stale-topic refresh suggestions based on indexed documents. Done for audit: stale wiki pages are matched with newer indexed sources when their topic tokens overlap.
 - Add contradiction candidates using retrieved claims and cited excerpts.
 - Store generated wiki pages with citation blocks and review status. In progress: generated pages include source citations and draft review metadata.
 - Separate human-approved wiki pages from draft AI pages. In progress: generated pages are written under `wiki/drafts/`, and audit now reports draft versus reviewed wiki pages separately.
@@ -221,6 +221,7 @@ Exit criteria:
 - The wiki becomes a browsable organized memory layer.
 - Generated pages cite original sources.
 - Draft pages are clearly marked as generated until reviewed, and audit lists drafts that still need human review.
+- Stale wiki pages can be linked back to newer source notes that may refresh them.
 
 ### Phase 5: Graph Memory and Higher-Level Insight
 

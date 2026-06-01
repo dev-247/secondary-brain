@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import os
 from pathlib import Path
 from unittest.mock import patch
 
 from scripts.audit import audit_wiki
+from scripts.metadata import (
+    CURRENT_INDEX_VERSION,
+    SourceRecord,
+    mark_source_indexed,
+)
 
 
 class AuditTests(unittest.TestCase):
@@ -31,6 +37,59 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(report["reviewed_files"], ["reviewed.md"])
         self.assertEqual(report["draft_count"], 1)
         self.assertEqual(report["reviewed_count"], 1)
+
+    def test_audit_suggests_newer_indexed_sources_for_stale_topics(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "wiki"
+            root.mkdir()
+            metadata_path = Path(directory) / "metadata.sqlite"
+            wiki_page = root / "project-alpha.md"
+            wiki_page.write_text("# Project Alpha\n", encoding="utf-8")
+            old_modified_ns = 1_700_000_000_000_000_000
+            os.utime(wiki_page, ns=(old_modified_ns, old_modified_ns))
+            mark_source_indexed(
+                metadata_path,
+                SourceRecord(
+                    path="project-alpha-roadmap.md",
+                    sha256="alpha",
+                    size_bytes=100,
+                    modified_ns=old_modified_ns + 10_000,
+                    chunks=2,
+                    mime_type="text/markdown",
+                    extension=".md",
+                    parser_name="direct",
+                    parser_version="1",
+                    index_version=CURRENT_INDEX_VERSION,
+                ),
+            )
+            mark_source_indexed(
+                metadata_path,
+                SourceRecord(
+                    path="unrelated-health.md",
+                    sha256="health",
+                    size_bytes=100,
+                    modified_ns=old_modified_ns + 20_000,
+                    chunks=1,
+                    mime_type="text/markdown",
+                    extension=".md",
+                    parser_name="direct",
+                    parser_version="1",
+                    index_version=CURRENT_INDEX_VERSION,
+                ),
+            )
+
+            with patch("scripts.audit.check_qdrant_health", return_value=False):
+                report = audit_wiki(root, metadata_path=metadata_path)
+
+        self.assertEqual(
+            report["refresh_suggestions"],
+            [
+                {
+                    "wiki": "project-alpha.md",
+                    "sources": ["project-alpha-roadmap.md"],
+                }
+            ],
+        )
 
 
 if __name__ == "__main__":
