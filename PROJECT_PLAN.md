@@ -237,7 +237,7 @@ Phase 4 review on 2026-06-01:
 
 Target: 1-2 weeks
 
-- Extract entities, topics, dates, projects, people, and relationships.
+- Extract entities, topics, dates, projects, people, and relationships. In progress: deterministic extraction handles explicit project/topic/date mentions and simple `uses` / `depends on` relationships.
 - Build a local graph store or SQLite-backed graph tables. Done for foundation: SQLite graph tables store normalized entities and source-backed relationships.
 - Add graph-assisted questions such as "how are these ideas connected?"
 - Add contradiction, timeline, and dependency discovery.
@@ -249,9 +249,10 @@ Exit criteria:
 
 Phase 5 progress on 2026-06-01:
 
-- `make smoke` passes with 45 tests.
+- `make smoke` passes with 48 tests.
 - Added a local SQLite graph store with entity de-duplication by normalized name.
 - Added source-backed relationships that preserve source path, chunk index, and evidence text.
+- Added `graph-build` to scan indexed chunks, extract conservative graph candidates, and store them locally.
 - Wrong or low-confidence extracted relationships can be reviewed.
 
 ### Phase 6: Product Interface and Access Anywhere

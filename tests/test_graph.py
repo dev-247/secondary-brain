@@ -6,9 +6,12 @@ from pathlib import Path
 
 from scripts.graph import (
     add_relationship,
+    extract_graph_candidates,
+    extract_graph_from_chunks,
     get_entity,
     init_graph_db,
     list_relationships,
+    store_graph_candidates,
     upsert_entity,
 )
 
@@ -59,6 +62,79 @@ class GraphTests(unittest.TestCase):
             relationship.evidence,
             "Project Alpha uses local-first AI for private notes.",
         )
+
+    def test_extract_graph_candidates_from_chunk_text(self) -> None:
+        candidates = extract_graph_candidates(
+            {
+                "path": "project-alpha.md",
+                "chunk_index": 3,
+                "content": (
+                    "Project Alpha uses Local First AI. "
+                    "Project Alpha depends on Hybrid Retrieval. "
+                    "Reviewed on 2026-06-01."
+                ),
+            }
+        )
+
+        self.assertEqual(
+            [(entity.entity_type, entity.name) for entity in candidates.entities],
+            [
+                ("project", "Project Alpha"),
+                ("date", "2026-06-01"),
+                ("topic", "Hybrid Retrieval"),
+                ("topic", "Local First AI"),
+            ],
+        )
+        self.assertEqual(len(candidates.relationships), 2)
+        self.assertEqual(candidates.relationships[0].subject, "Project Alpha")
+        self.assertEqual(candidates.relationships[0].predicate, "uses")
+        self.assertEqual(candidates.relationships[0].object, "Local First AI")
+        self.assertEqual(candidates.relationships[0].source_path, "project-alpha.md")
+        self.assertEqual(candidates.relationships[0].chunk_index, 3)
+
+    def test_store_graph_candidates_persists_entities_and_relationships(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "graph.sqlite"
+            candidates = extract_graph_candidates(
+                {
+                    "path": "project-alpha.md",
+                    "chunk_index": 0,
+                    "content": "Project Alpha uses Local First AI.",
+                }
+            )
+
+            stats = store_graph_candidates(db_path, candidates)
+            relationships = list_relationships(db_path)
+
+        self.assertEqual(stats, {"entities": 2, "relationships": 1})
+        self.assertEqual(len(relationships), 1)
+        self.assertEqual(relationships[0].subject_name, "Project Alpha")
+        self.assertEqual(relationships[0].predicate, "uses")
+        self.assertEqual(relationships[0].object_name, "Local First AI")
+
+    def test_extract_graph_from_chunks_combines_stats(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "graph.sqlite"
+
+            stats = extract_graph_from_chunks(
+                [
+                    {
+                        "path": "project-alpha.md",
+                        "chunk_index": 0,
+                        "content": "Project Alpha uses Local First AI.",
+                    },
+                    {
+                        "path": "project-alpha.md",
+                        "chunk_index": 1,
+                        "content": "Project Alpha depends on Hybrid Retrieval.",
+                    },
+                ],
+                db_path=db_path,
+            )
+            relationships = list_relationships(db_path)
+
+        self.assertEqual(stats, {"chunks": 2, "entities": 4, "relationships": 2})
+        self.assertEqual(len(relationships), 2)
 
 
 if __name__ == "__main__":

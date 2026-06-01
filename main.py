@@ -12,6 +12,7 @@ from rich.table import Table
 from scripts.audit import audit_wiki, print_audit_report
 from scripts.config import VAULT_DIR, WIKI_DIR
 from scripts.doctor import print_doctor_report
+from scripts.graph import extract_graph_from_chunks, indexed_chunks_from_qdrant
 from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
 from scripts.router import ABSTENTION_MESSAGE, synthesize_answer, synthesize_answer_result
@@ -152,6 +153,21 @@ def cmd_audit(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_graph_build(args: argparse.Namespace) -> int:
+    if not check_qdrant_health():
+        console.print("[red]Qdrant is not running. Start it with: docker compose up -d[/red]")
+        return 1
+
+    chunks = indexed_chunks_from_qdrant(limit=args.limit)
+    stats = extract_graph_from_chunks(chunks)
+    console.print(
+        f"[green]Graph extraction complete.[/green] "
+        f"Scanned {stats['chunks']} chunks, found {stats['entities']} entities "
+        f"and {stats['relationships']} relationships."
+    )
+    return 0
+
+
 def cmd_wiki_generate(args: argparse.Namespace) -> int:
     if not check_qdrant_health():
         console.print("[red]Qdrant is not running. Start it with: docker compose up -d[/red]")
@@ -250,6 +266,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     audit_parser = subparsers.add_parser("audit", help="Run wiki health audit")
     audit_parser.set_defaults(func=cmd_audit)
+
+    graph_parser = subparsers.add_parser("graph-build", help="Extract graph facts from indexed chunks")
+    graph_parser.add_argument("--limit", type=int, default=500, help="Maximum indexed chunks to scan")
+    graph_parser.set_defaults(func=cmd_graph_build)
 
     wiki_parser = subparsers.add_parser("wiki-generate", help="Generate a cited draft wiki page")
     wiki_parser.add_argument("topic", help="Topic to generate")
