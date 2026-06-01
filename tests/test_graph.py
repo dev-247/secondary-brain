@@ -11,6 +11,7 @@ from scripts.graph import (
     get_entity,
     init_graph_db,
     list_relationships,
+    relationships_for_entity,
     store_graph_candidates,
     upsert_entity,
 )
@@ -135,6 +136,42 @@ class GraphTests(unittest.TestCase):
 
         self.assertEqual(stats, {"chunks": 2, "entities": 4, "relationships": 2})
         self.assertEqual(len(relationships), 2)
+
+    def test_relationships_for_entity_returns_inbound_and_outbound_links(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "graph.sqlite"
+            alpha_id = upsert_entity(db_path, entity_type="project", name="Project Alpha")
+            local_ai_id = upsert_entity(db_path, entity_type="topic", name="Local First AI")
+            beta_id = upsert_entity(db_path, entity_type="project", name="Project Beta")
+            add_relationship(
+                db_path,
+                subject_id=alpha_id,
+                predicate="uses",
+                object_id=local_ai_id,
+                source_path="alpha.md",
+                chunk_index=0,
+                evidence="Project Alpha uses Local First AI.",
+            )
+            add_relationship(
+                db_path,
+                subject_id=beta_id,
+                predicate="depends_on",
+                object_id=alpha_id,
+                source_path="beta.md",
+                chunk_index=1,
+                evidence="Project Beta depends on Project Alpha.",
+            )
+
+            relationships = relationships_for_entity(db_path, "Project Alpha")
+
+        self.assertEqual(len(relationships), 2)
+        self.assertEqual(
+            [(item.subject_name, item.predicate, item.object_name) for item in relationships],
+            [
+                ("Project Alpha", "uses", "Local First AI"),
+                ("Project Beta", "depends_on", "Project Alpha"),
+            ],
+        )
 
 
 if __name__ == "__main__":

@@ -324,6 +324,55 @@ def list_relationships(db_path: Path = GRAPH_DB_PATH) -> list[GraphRelationship]
     ]
 
 
+def relationships_for_entity(
+    db_path: Path = GRAPH_DB_PATH,
+    name: str = "",
+) -> list[GraphRelationship]:
+    init_graph_db(db_path)
+    normalized_name = _normalize_name(name)
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                relationship.id,
+                relationship.subject_id,
+                subject.name,
+                relationship.predicate,
+                relationship.object_id,
+                object.name,
+                relationship.source_path,
+                relationship.chunk_index,
+                relationship.evidence
+            FROM graph_relationships AS relationship
+            JOIN graph_entities AS subject ON subject.id = relationship.subject_id
+            JOIN graph_entities AS object ON object.id = relationship.object_id
+            WHERE subject.normalized_name = ?
+               OR object.normalized_name = ?
+            ORDER BY
+                CASE WHEN subject.normalized_name = ? THEN 0 ELSE 1 END,
+                relationship.source_path,
+                relationship.chunk_index,
+                relationship.id
+            """,
+            (normalized_name, normalized_name, normalized_name),
+        ).fetchall()
+
+    return [
+        GraphRelationship(
+            id=int(row[0]),
+            subject_id=int(row[1]),
+            subject_name=str(row[2]),
+            predicate=str(row[3]),
+            object_id=int(row[4]),
+            object_name=str(row[5]),
+            source_path=str(row[6]),
+            chunk_index=int(row[7]),
+            evidence=str(row[8]),
+        )
+        for row in rows
+    ]
+
+
 def store_graph_candidates(
     db_path: Path = GRAPH_DB_PATH,
     candidates: GraphCandidates | None = None,

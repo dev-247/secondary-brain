@@ -12,7 +12,7 @@ from rich.table import Table
 from scripts.audit import audit_wiki, print_audit_report
 from scripts.config import VAULT_DIR, WIKI_DIR
 from scripts.doctor import print_doctor_report
-from scripts.graph import extract_graph_from_chunks, indexed_chunks_from_qdrant
+from scripts.graph import extract_graph_from_chunks, indexed_chunks_from_qdrant, relationships_for_entity
 from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
 from scripts.router import ABSTENTION_MESSAGE, synthesize_answer, synthesize_answer_result
@@ -168,6 +168,31 @@ def cmd_graph_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_graph(args: argparse.Namespace) -> int:
+    relationships = relationships_for_entity(name=args.entity)
+    if not relationships:
+        console.print(f"[yellow]No graph relationships found for {args.entity!r}.[/yellow]")
+        console.print("[dim]Run graph-build after ingesting sources, then try again.[/dim]")
+        return 0
+
+    table = Table(title=f"Graph Connections: {args.entity}")
+    table.add_column("Subject")
+    table.add_column("Relation")
+    table.add_column("Object")
+    table.add_column("Source")
+    table.add_column("Evidence")
+    for relationship in relationships[: args.limit]:
+        table.add_row(
+            relationship.subject_name,
+            relationship.predicate,
+            relationship.object_name,
+            f"{relationship.source_path}#{relationship.chunk_index}",
+            relationship.evidence,
+        )
+    console.print(table)
+    return 0
+
+
 def cmd_wiki_generate(args: argparse.Namespace) -> int:
     if not check_qdrant_health():
         console.print("[red]Qdrant is not running. Start it with: docker compose up -d[/red]")
@@ -270,6 +295,11 @@ def build_parser() -> argparse.ArgumentParser:
     graph_parser = subparsers.add_parser("graph-build", help="Extract graph facts from indexed chunks")
     graph_parser.add_argument("--limit", type=int, default=500, help="Maximum indexed chunks to scan")
     graph_parser.set_defaults(func=cmd_graph_build)
+
+    graph_query_parser = subparsers.add_parser("graph", help="Show graph connections for an entity")
+    graph_query_parser.add_argument("entity", help="Entity name, such as 'Project Alpha'")
+    graph_query_parser.add_argument("--limit", type=int, default=10, help="Maximum relationships to show")
+    graph_query_parser.set_defaults(func=cmd_graph)
 
     wiki_parser = subparsers.add_parser("wiki-generate", help="Generate a cited draft wiki page")
     wiki_parser.add_argument("topic", help="Topic to generate")
