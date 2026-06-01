@@ -185,17 +185,26 @@ Phase 2 review on 2026-05-31:
 
 Target: 3-5 days
 
-- Strengthen prompt templates for grounded answers.
-- Add source coverage checks before synthesis. In progress: weak source coverage is now refused before LLM synthesis.
-- Add confidence labels based on retrieval strength and source agreement. In progress: answer result objects now carry low/medium/high confidence from source coverage.
+- Strengthen prompt templates for grounded answers. Done for current CLI flow; deeper prompt tuning is deferred until real answer transcripts exist.
+- Add source coverage checks before synthesis. Done.
+- Add confidence labels based on retrieval strength and source agreement. Done.
 - Make abstention behavior consistent. Done.
-- Add answer tests with mocked retrieval and mocked LLM responses.
+- Add answer tests with mocked retrieval and mocked LLM responses. Done.
 
 Exit criteria:
 
-- The system refuses weakly supported answers. In progress: source coverage checks now gate synthesis.
-- Every factual answer includes citations. In progress: uncited model answers are rejected.
-- Local and cloud modes share the same trust rules.
+- The system refuses weakly supported answers. Done.
+- Every factual answer includes citations. Done.
+- Local and cloud modes share the same trust rules. Done.
+
+Phase 3 review on 2026-06-01:
+
+- `make smoke` passes with 35 tests.
+- Weak source coverage is refused before local or cloud LLM calls.
+- Answers carry low/medium/high confidence labels.
+- Abstention is normalized to one message.
+- Uncited generated answers are rejected.
+- Local and cloud model outputs pass through the same trust gate.
 
 ### Phase 4: LLM Wiki Memory
 
