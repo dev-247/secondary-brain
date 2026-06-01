@@ -13,6 +13,34 @@ from scripts.qdrant_setup import check_qdrant_health, get_client
 
 console = Console()
 STALE_DAYS = 90
+CONTRADICTION_SIGNAL_PAIRS = (
+    ("required", "optional"),
+    ("mandatory", "optional"),
+    ("must", "optional"),
+    ("enabled", "disabled"),
+    ("enable", "disable"),
+    ("allowed", "blocked"),
+    ("allow", "deny"),
+    ("increase", "decrease"),
+    ("true", "false"),
+)
+STOPWORDS = {
+    "about",
+    "after",
+    "answers",
+    "before",
+    "deep",
+    "from",
+    "into",
+    "note",
+    "notes",
+    "routine",
+    "should",
+    "source",
+    "that",
+    "this",
+    "with",
+}
 
 
 def _wiki_files(root: Path | None = None) -> list[Path]:
@@ -38,7 +66,23 @@ def _review_status(path: Path) -> str:
 def _topic_tokens(path: str) -> set[str]:
     stem = Path(path).stem.lower()
     tokens = set(re.findall(r"[a-z0-9]+", stem))
-    return {token for token in tokens if len(token) > 2}
+    return {token for token in tokens if len(token) > 2 and token not in STOPWORDS}
+
+
+def _text_tokens(text: str) -> set[str]:
+    tokens = set(re.findall(r"[a-z0-9]+", text.lower()))
+    return {token for token in tokens if len(token) > 2 and token not in STOPWORDS}
+
+
+def _has_signal(text: str, signal: str) -> bool:
+    return re.search(rf"\b{re.escape(signal)}\b", text.lower()) is not None
+
+
+def _preview(text: str, limit: int = 120) -> str:
+    collapsed = " ".join(text.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[: max(0, limit - 3)].rstrip() + "..."
 
 
 def _related_newer_sources(
@@ -64,6 +108,83 @@ def _related_newer_sources(
 
     matches.sort(key=lambda record: (-record.modified_ns, record.path))
     return [record.path for record in matches[:limit]]
+
+
+def detect_contradiction_candidates(
+    chunks: list[dict[str, str]],
+    *,
+    limit: int = 5,
+) -> list[dict[str, object]]:
+    candidates: list[dict[str, object]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+
+    for left_index, left in enumerate(chunks):
+        left_path = left.get("path", "")
+        left_content = left.get("content", "")
+        left_tokens = _topic_tokens(left_path) | _text_tokens(left_content)
+        if not left_path or not left_content:
+            continue
+
+        for right in chunks[left_index + 1 :]:
+            right_path = right.get("path", "")
+            right_content = right.get("content", "")
+            if not right_path or not right_content or right_path == left_path:
+                continue
+
+            shared_terms = sorted(left_tokens & (_topic_tokens(right_path) | _text_tokens(right_content)))
+            if len(shared_terms) < 2:
+                continue
+
+            for positive, negative in CONTRADICTION_SIGNAL_PAIRS:
+                left_has_positive = _has_signal(left_content, positive)
+                left_has_negative = _has_signal(left_content, negative)
+                right_has_positive = _has_signal(right_content, positive)
+                right_has_negative = _has_signal(right_content, negative)
+                if not (
+                    (left_has_positive and right_has_negative)
+                    or (left_has_negative and right_has_positive)
+                ):
+                    continue
+
+                dedupe_sources = sorted([left_path, right_path])
+                key = (dedupe_sources[0], dedupe_sources[1], positive, negative)
+                if key in seen:
+                    continue
+                seen.add(key)
+                candidates.append(
+                    {
+                        "sources": [left_path, right_path],
+                        "signals": [positive, negative],
+                        "shared_terms": shared_terms[:6],
+                        "excerpts": [
+                            {"path": left_path, "text": _preview(left_content)},
+                            {"path": right_path, "text": _preview(right_content)},
+                        ],
+                    }
+                )
+                if len(candidates) >= limit:
+                    return candidates
+                break
+
+    return candidates
+
+
+def _indexed_chunks_from_qdrant(limit: int = 200) -> list[dict[str, str]]:
+    points, _ = get_client().scroll(
+        collection_name=QDRANT_COLLECTION,
+        limit=limit,
+        with_payload=True,
+    )
+    chunks: list[dict[str, str]] = []
+    for point in points:
+        payload = point.payload or {}
+        chunks.append(
+            {
+                "path": str(payload.get("path", "")),
+                "content": str(payload.get("content", "")),
+            }
+        )
+    return chunks
 
 
 def audit_wiki(
@@ -103,12 +224,17 @@ def audit_wiki(
 
     qdrant_ok = check_qdrant_health()
     indexed_chunks = 0
+    contradiction_candidates: list[dict[str, object]] = []
     if qdrant_ok:
         try:
             info = get_client().get_collection(QDRANT_COLLECTION)
             indexed_chunks = info.points_count or 0
+            contradiction_candidates = detect_contradiction_candidates(
+                _indexed_chunks_from_qdrant()
+            )
         except Exception:
             indexed_chunks = 0
+            contradiction_candidates = []
 
     return {
         "wiki_files": len(files),
@@ -119,6 +245,7 @@ def audit_wiki(
         "draft_count": len(draft_files),
         "reviewed_count": len(reviewed_files),
         "refresh_suggestions": refresh_suggestions,
+        "contradiction_candidates": contradiction_candidates,
         "indexed_chunks": indexed_chunks,
         "qdrant_ok": qdrant_ok,
     }
@@ -135,6 +262,7 @@ def print_audit_report(report: dict[str, object]) -> None:
     table.add_row("Reviewed wiki pages", str(report["reviewed_count"]))
     table.add_row("Stale articles (>90d)", str(len(report["stale_files"])))
     table.add_row("Refresh suggestions", str(len(report["refresh_suggestions"])))
+    table.add_row("Contradiction candidates", str(len(report["contradiction_candidates"])))
     console.print(table)
 
     stale_files = report["stale_files"]
@@ -155,6 +283,15 @@ def print_audit_report(report: dict[str, object]) -> None:
         for item in refresh_suggestions:
             sources = ", ".join(item["sources"])
             console.print(f"  - {item['wiki']} from {sources}")
+
+    contradiction_candidates = report["contradiction_candidates"]
+    if contradiction_candidates:
+        console.print("\n[yellow]Possible contradictions to review:[/yellow]")
+        for item in contradiction_candidates:
+            sources = " <> ".join(item["sources"])
+            signals = " vs ".join(item["signals"])
+            terms = ", ".join(item["shared_terms"])
+            console.print(f"  - {sources} ({signals}; shared: {terms})")
 
     topics = report["topics"]
     if not topics:

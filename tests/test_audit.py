@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.audit import audit_wiki
+from scripts.audit import audit_wiki, detect_contradiction_candidates
 from scripts.metadata import (
     CURRENT_INDEX_VERSION,
     SourceRecord,
@@ -90,6 +90,32 @@ class AuditTests(unittest.TestCase):
                 }
             ],
         )
+
+    def test_detects_contradiction_candidates_from_related_chunks(self) -> None:
+        candidates = detect_contradiction_candidates(
+            [
+                {
+                    "path": "project-alpha.md",
+                    "content": "For Project Alpha, the cloud LLM is required for deep answers.",
+                },
+                {
+                    "path": "project-alpha-review.md",
+                    "content": "For Project Alpha, the cloud LLM is optional for deep answers.",
+                },
+                {
+                    "path": "health.md",
+                    "content": "A morning walk is optional for this routine.",
+                },
+            ]
+        )
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(
+            candidates[0]["sources"],
+            ["project-alpha.md", "project-alpha-review.md"],
+        )
+        self.assertEqual(candidates[0]["signals"], ["required", "optional"])
+        self.assertIn("project", candidates[0]["shared_terms"])
 
 
 if __name__ == "__main__":
