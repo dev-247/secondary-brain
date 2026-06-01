@@ -238,7 +238,7 @@ Phase 4 review on 2026-06-01:
 Target: 1-2 weeks
 
 - Extract entities, topics, dates, projects, people, and relationships.
-- Build a local graph store or SQLite-backed graph tables.
+- Build a local graph store or SQLite-backed graph tables. Done for foundation: SQLite graph tables store normalized entities and source-backed relationships.
 - Add graph-assisted questions such as "how are these ideas connected?"
 - Add contradiction, timeline, and dependency discovery.
 
@@ -246,6 +246,12 @@ Exit criteria:
 
 - The graph layer improves relationship and multi-hop queries.
 - Graph facts link back to source chunks.
+
+Phase 5 progress on 2026-06-01:
+
+- `make smoke` passes with 45 tests.
+- Added a local SQLite graph store with entity de-duplication by normalized name.
+- Added source-backed relationships that preserve source path, chunk index, and evidence text.
 - Wrong or low-confidence extracted relationships can be reviewed.
 
 ### Phase 6: Product Interface and Access Anywhere
