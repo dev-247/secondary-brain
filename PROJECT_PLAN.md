@@ -210,11 +210,11 @@ Phase 3 review on 2026-06-01:
 
 Target: 1 week
 
-- Add a command to generate source summaries into `wiki/`. In progress: deterministic cited draft generation is available with `wiki-generate`.
+- Add a command to generate source summaries into `wiki/`. Done for this phase: deterministic cited draft generation is available with `wiki-generate`.
 - Add stale-topic refresh suggestions based on indexed documents. Done for audit: stale wiki pages are matched with newer indexed sources when their topic tokens overlap.
 - Add contradiction candidates using retrieved claims and cited excerpts. Done for audit: indexed chunks are scanned for related notes with opposite signal words and surfaced as review candidates.
-- Store generated wiki pages with citation blocks and review status. In progress: generated pages include source citations, draft review metadata, and safe promotion to reviewed pages.
-- Separate human-approved wiki pages from draft AI pages. In progress: generated pages are written under `wiki/drafts/`, audit reports draft versus reviewed pages separately, and `wiki-promote` moves reviewed drafts into `wiki/`.
+- Store generated wiki pages with citation blocks and review status. Done for this phase: generated pages include source citations, draft review metadata, and safe promotion to reviewed pages.
+- Separate human-approved wiki pages from draft AI pages. Done for this phase: generated pages are written under `wiki/drafts/`, audit reports draft versus reviewed pages separately, and `wiki-promote` moves reviewed drafts into `wiki/`.
 
 Exit criteria:
 
@@ -224,6 +224,14 @@ Exit criteria:
 - Reviewed drafts can be promoted without silently overwriting existing wiki pages.
 - Stale wiki pages can be linked back to newer source notes that may refresh them.
 - Possible contradictions are shown as review candidates with source paths, signals, and shared topic terms.
+
+Phase 4 review on 2026-06-01:
+
+- `make smoke` passes with 43 tests.
+- `wiki-generate` creates cited AI draft pages under `wiki/drafts/`.
+- `wiki-promote` moves reviewed drafts into `wiki/`, records the reviewer, and refuses accidental overwrites by default.
+- Audit separates draft and reviewed wiki pages, lists drafts awaiting review, suggests stale-topic refresh sources, and flags conservative contradiction candidates.
+- Remaining gap: contradiction and refresh detection are intentionally heuristic; stronger semantic claim extraction belongs in Phase 5 graph memory.
 
 ### Phase 5: Graph Memory and Higher-Level Insight
 
