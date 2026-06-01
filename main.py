@@ -14,7 +14,7 @@ from scripts.config import VAULT_DIR, WIKI_DIR
 from scripts.doctor import print_doctor_report
 from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
-from scripts.router import synthesize_answer
+from scripts.router import synthesize_answer, synthesize_answer_result
 from scripts.search import diagnostic_rows, format_citation, hybrid_search
 
 console = Console()
@@ -69,7 +69,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
         return 0
 
     try:
-        answer, mode = synthesize_answer(
+        answer_result = synthesize_answer_result(
             args.query,
             results,
             force_deep=args.deep,
@@ -79,7 +79,13 @@ def cmd_ask(args: argparse.Namespace) -> int:
         console.print(f"[red]{exc}[/red]")
         return 1
 
-    console.print(Panel(Markdown(answer), title=f"Answer ({mode} mode)", border_style="green"))
+    console.print(
+        Panel(
+            Markdown(answer_result.answer),
+            title=f"Answer ({answer_result.mode} mode, {answer_result.confidence} confidence)",
+            border_style="green",
+        )
+    )
 
     console.print("\n[bold]Sources[/bold]")
     for index, result in enumerate(results, start=1):

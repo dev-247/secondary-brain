@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.router import assess_source_coverage, choose_mode, synthesize_answer
+from unittest.mock import patch
+
+from scripts.router import assess_source_coverage, choose_mode, synthesize_answer, synthesize_answer_result
 from scripts.search import SearchResult
 
 
@@ -57,6 +59,18 @@ class RouterTests(unittest.TestCase):
 
         self.assertEqual(answer, "No information found in your knowledge base.")
         self.assertEqual(mode, "none")
+
+    def test_synthesize_answer_result_includes_confidence(self) -> None:
+        with patch("scripts.router._chat_ollama", return_value="Grounded answer [1]."):
+            result = synthesize_answer_result(
+                "What is the project alpha goal?",
+                [source("Project Alpha goal is grounded answers with citations.")],
+                mode="fast",
+            )
+
+        self.assertEqual(result.answer, "Grounded answer [1].")
+        self.assertEqual(result.mode, "fast")
+        self.assertEqual(result.confidence, "high")
 
 
 if __name__ == "__main__":

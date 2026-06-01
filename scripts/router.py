@@ -39,6 +39,14 @@ class SourceCoverage:
     best_score: float
 
 
+@dataclass(frozen=True)
+class AnswerResult:
+    answer: str
+    mode: str
+    confidence: str
+    source_coverage: SourceCoverage
+
+
 def _query_terms(query: str) -> set[str]:
     return {
         term
@@ -146,19 +154,20 @@ def _chat_openrouter(query: str, context: str) -> str:
     return str(choices[0]["message"]["content"]).strip()
 
 
-def synthesize_answer(
+def synthesize_answer_result(
     query: str,
     sources: list[SearchResult],
     *,
     mode: str | None = None,
     force_deep: bool = False,
-) -> tuple[str, str]:
+) -> AnswerResult:
     if not sources:
-        return "No information found in your knowledge base.", "none"
+        coverage = SourceCoverage(False, "low", 0.0, 0.0)
+        return AnswerResult("No information found in your knowledge base.", "none", "low", coverage)
 
     coverage = assess_source_coverage(query, sources)
     if not coverage.supported:
-        return "No information found in your knowledge base.", "none"
+        return AnswerResult("No information found in your knowledge base.", "none", coverage.confidence, coverage)
 
     context = _build_context(sources)
     selected_mode = mode or choose_mode(query, force_deep=force_deep)
@@ -168,4 +177,15 @@ def synthesize_answer(
     else:
         answer = _chat_ollama(query, context)
 
-    return answer, selected_mode
+    return AnswerResult(answer, selected_mode, coverage.confidence, coverage)
+
+
+def synthesize_answer(
+    query: str,
+    sources: list[SearchResult],
+    *,
+    mode: str | None = None,
+    force_deep: bool = False,
+) -> tuple[str, str]:
+    result = synthesize_answer_result(query, sources, mode=mode, force_deep=force_deep)
+    return result.answer, result.mode
