@@ -213,14 +213,15 @@ Target: 1 week
 - Add a command to generate source summaries into `wiki/`. In progress: deterministic cited draft generation is available with `wiki-generate`.
 - Add stale-topic refresh suggestions based on indexed documents. Done for audit: stale wiki pages are matched with newer indexed sources when their topic tokens overlap.
 - Add contradiction candidates using retrieved claims and cited excerpts. Done for audit: indexed chunks are scanned for related notes with opposite signal words and surfaced as review candidates.
-- Store generated wiki pages with citation blocks and review status. In progress: generated pages include source citations and draft review metadata.
-- Separate human-approved wiki pages from draft AI pages. In progress: generated pages are written under `wiki/drafts/`, and audit now reports draft versus reviewed wiki pages separately.
+- Store generated wiki pages with citation blocks and review status. In progress: generated pages include source citations, draft review metadata, and safe promotion to reviewed pages.
+- Separate human-approved wiki pages from draft AI pages. In progress: generated pages are written under `wiki/drafts/`, audit reports draft versus reviewed pages separately, and `wiki-promote` moves reviewed drafts into `wiki/`.
 
 Exit criteria:
 
 - The wiki becomes a browsable organized memory layer.
 - Generated pages cite original sources.
 - Draft pages are clearly marked as generated until reviewed, and audit lists drafts that still need human review.
+- Reviewed drafts can be promoted without silently overwriting existing wiki pages.
 - Stale wiki pages can be linked back to newer source notes that may refresh them.
 - Possible contradictions are shown as review candidates with source paths, signals, and shared topic terms.
 

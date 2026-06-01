@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from scripts.search import SearchResult
-from scripts.wiki import build_wiki_draft, slugify, write_wiki_draft
+from scripts.wiki import build_wiki_draft, promote_wiki_draft, slugify, write_wiki_draft
 
 
 def result(content: str, path: str = "note.md", heading: str = "Ideas") -> SearchResult:
@@ -51,6 +51,38 @@ class WikiTests(unittest.TestCase):
             self.assertEqual(path.name, "project-alpha.md")
             self.assertEqual(path.parent.name, "drafts")
             self.assertTrue(path.exists())
+
+    def test_promote_wiki_draft_marks_reviewed_and_moves_page(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            wiki_root = Path(directory)
+            draft_path = write_wiki_draft(
+                "Project Alpha",
+                [result("Project Alpha keeps documents local by default.")],
+                wiki_root=wiki_root,
+            )
+
+            promoted_path = promote_wiki_draft("project-alpha", wiki_root=wiki_root, reviewer="Vasu")
+
+            self.assertEqual(promoted_path, wiki_root / "project-alpha.md")
+            self.assertFalse(draft_path.exists())
+            promoted = promoted_path.read_text(encoding="utf-8")
+            self.assertIn("review_status: reviewed", promoted)
+            self.assertIn("reviewed_by: Vasu", promoted)
+            self.assertIn("- Status: reviewed", promoted)
+            self.assertIn("- Reviewer: Vasu", promoted)
+
+    def test_promote_wiki_draft_refuses_to_overwrite_existing_page(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            wiki_root = Path(directory)
+            write_wiki_draft(
+                "Project Alpha",
+                [result("Project Alpha keeps documents local by default.")],
+                wiki_root=wiki_root,
+            )
+            (wiki_root / "project-alpha.md").write_text("# Existing\n", encoding="utf-8")
+
+            with self.assertRaises(FileExistsError):
+                promote_wiki_draft("project-alpha", wiki_root=wiki_root, reviewer="Vasu")
 
 
 if __name__ == "__main__":

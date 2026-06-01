@@ -16,7 +16,7 @@ from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
 from scripts.router import ABSTENTION_MESSAGE, synthesize_answer, synthesize_answer_result
 from scripts.search import diagnostic_rows, format_citation, hybrid_search
-from scripts.wiki import write_wiki_draft
+from scripts.wiki import promote_wiki_draft, write_wiki_draft
 
 console = Console()
 
@@ -167,6 +167,25 @@ def cmd_wiki_generate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_wiki_promote(args: argparse.Namespace) -> int:
+    try:
+        path = promote_wiki_draft(
+            args.draft,
+            reviewer=args.reviewer,
+            overwrite=args.overwrite,
+        )
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return 1
+    except FileExistsError as exc:
+        console.print(f"[red]{exc}[/red]")
+        console.print("[yellow]Use --overwrite only after checking the existing reviewed page.[/yellow]")
+        return 1
+
+    console.print(f"[green]Reviewed wiki page written:[/green] {path}")
+    return 0
+
+
 def cmd_chat(_: argparse.Namespace) -> int:
     if not check_qdrant_health():
         console.print("[red]Qdrant is not running. Start it with: docker compose up -d[/red]")
@@ -236,6 +255,16 @@ def build_parser() -> argparse.ArgumentParser:
     wiki_parser.add_argument("topic", help="Topic to generate")
     wiki_parser.add_argument("--limit", type=int, default=5, help="Number of source chunks to use")
     wiki_parser.set_defaults(func=cmd_wiki_generate)
+
+    promote_parser = subparsers.add_parser("wiki-promote", help="Promote a reviewed draft wiki page")
+    promote_parser.add_argument("draft", help="Draft slug or title to promote from wiki/drafts")
+    promote_parser.add_argument("--reviewer", default="human", help="Reviewer name to record")
+    promote_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace an existing reviewed wiki page after manual review",
+    )
+    promote_parser.set_defaults(func=cmd_wiki_promote)
 
     chat_parser = subparsers.add_parser("chat", help="Interactive Q&A loop")
     chat_parser.set_defaults(func=cmd_chat)
