@@ -188,7 +188,7 @@ Target: 3-5 days
 - Strengthen prompt templates for grounded answers.
 - Add source coverage checks before synthesis. In progress: weak source coverage is now refused before LLM synthesis.
 - Add confidence labels based on retrieval strength and source agreement. In progress: answer result objects now carry low/medium/high confidence from source coverage.
-- Make abstention behavior consistent.
+- Make abstention behavior consistent. Done.
 - Add answer tests with mocked retrieval and mocked LLM responses.
 
 Exit criteria:

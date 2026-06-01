@@ -14,7 +14,7 @@ from scripts.config import VAULT_DIR, WIKI_DIR
 from scripts.doctor import print_doctor_report
 from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
-from scripts.router import synthesize_answer, synthesize_answer_result
+from scripts.router import ABSTENTION_MESSAGE, synthesize_answer, synthesize_answer_result
 from scripts.search import diagnostic_rows, format_citation, hybrid_search
 
 console = Console()
@@ -65,7 +65,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
 
     results = hybrid_search(args.query, limit=args.limit)
     if not results:
-        console.print("[yellow]No information found in your knowledge base.[/yellow]")
+        console.print(f"[yellow]{ABSTENTION_MESSAGE}[/yellow]")
         return 0
 
     try:
@@ -103,7 +103,7 @@ def cmd_search(args: argparse.Namespace) -> int:
 
     results = hybrid_search(args.query, limit=args.limit)
     if not results:
-        console.print("[yellow]No information found in your knowledge base.[/yellow]")
+        console.print(f"[yellow]{ABSTENTION_MESSAGE}[/yellow]")
         return 0
 
     table = Table(title="Search Diagnostics" if args.debug else "Search Results")
@@ -172,7 +172,7 @@ def cmd_chat(_: argparse.Namespace) -> int:
 
         results = hybrid_search(query)
         if not results:
-            console.print("[yellow]No information found in your knowledge base.[/yellow]\n")
+            console.print(f"[yellow]{ABSTENTION_MESSAGE}[/yellow]\n")
             continue
 
         answer, mode = synthesize_answer(query, results)

@@ -20,6 +20,8 @@ DEEP_QUERY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+ABSTENTION_MESSAGE = "No information found in your knowledge base."
+
 SYSTEM_PROMPT = """You are a personal knowledge assistant with access to the user's private documents.
 Answer ONLY using the provided context snippets.
 If the context does not contain enough information, say exactly:
@@ -29,6 +31,14 @@ Do not invent facts or sources."""
 
 MIN_SOURCE_SCORE = 0.2
 MIN_LEXICAL_COVERAGE = 0.25
+MODEL_ABSTENTION_PATTERNS = {
+    "i don't know",
+    "i do not know",
+    "not enough information",
+    "insufficient information",
+    "cannot answer",
+    "no relevant information",
+}
 
 
 @dataclass(frozen=True)
@@ -77,6 +87,16 @@ def assess_source_coverage(query: str, sources: list[SearchResult]) -> SourceCov
         confidence = "low"
 
     return SourceCoverage(supported, confidence, lexical_coverage, best_score)
+
+
+def normalize_answer(answer: str) -> str:
+    cleaned = answer.strip()
+    normalized = cleaned.rstrip(".").lower()
+    if cleaned == ABSTENTION_MESSAGE:
+        return ABSTENTION_MESSAGE
+    if normalized in MODEL_ABSTENTION_PATTERNS:
+        return ABSTENTION_MESSAGE
+    return cleaned
 
 
 def _build_context(sources: list[SearchResult]) -> str:
@@ -163,11 +183,11 @@ def synthesize_answer_result(
 ) -> AnswerResult:
     if not sources:
         coverage = SourceCoverage(False, "low", 0.0, 0.0)
-        return AnswerResult("No information found in your knowledge base.", "none", "low", coverage)
+        return AnswerResult(ABSTENTION_MESSAGE, "none", "low", coverage)
 
     coverage = assess_source_coverage(query, sources)
     if not coverage.supported:
-        return AnswerResult("No information found in your knowledge base.", "none", coverage.confidence, coverage)
+        return AnswerResult(ABSTENTION_MESSAGE, "none", coverage.confidence, coverage)
 
     context = _build_context(sources)
     selected_mode = mode or choose_mode(query, force_deep=force_deep)
@@ -176,6 +196,10 @@ def synthesize_answer_result(
         answer = _chat_openrouter(query, context)
     else:
         answer = _chat_ollama(query, context)
+
+    answer = normalize_answer(answer)
+    if answer == ABSTENTION_MESSAGE:
+        return AnswerResult(answer, "none", "low", coverage)
 
     return AnswerResult(answer, selected_mode, coverage.confidence, coverage)
 

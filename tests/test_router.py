@@ -4,7 +4,14 @@ import unittest
 
 from unittest.mock import patch
 
-from scripts.router import assess_source_coverage, choose_mode, synthesize_answer, synthesize_answer_result
+from scripts.router import (
+    ABSTENTION_MESSAGE,
+    assess_source_coverage,
+    choose_mode,
+    normalize_answer,
+    synthesize_answer,
+    synthesize_answer_result,
+)
 from scripts.search import SearchResult
 
 
@@ -57,8 +64,12 @@ class RouterTests(unittest.TestCase):
             mode="fast",
         )
 
-        self.assertEqual(answer, "No information found in your knowledge base.")
+        self.assertEqual(answer, ABSTENTION_MESSAGE)
         self.assertEqual(mode, "none")
+
+    def test_normalize_answer_standardizes_model_abstention(self) -> None:
+        self.assertEqual(normalize_answer("I don't know."), ABSTENTION_MESSAGE)
+        self.assertEqual(normalize_answer("No information found in your knowledge base."), ABSTENTION_MESSAGE)
 
     def test_synthesize_answer_result_includes_confidence(self) -> None:
         with patch("scripts.router._chat_ollama", return_value="Grounded answer [1]."):
