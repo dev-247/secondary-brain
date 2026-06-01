@@ -210,11 +210,11 @@ Phase 3 review on 2026-06-01:
 
 Target: 1 week
 
-- Add a command to generate source summaries into `wiki/`.
+- Add a command to generate source summaries into `wiki/`. In progress: deterministic cited draft generation is available with `wiki-generate`.
 - Add stale-topic refresh suggestions based on indexed documents.
 - Add contradiction candidates using retrieved claims and cited excerpts.
-- Store generated wiki pages with citation blocks and review status.
-- Separate human-approved wiki pages from draft AI pages.
+- Store generated wiki pages with citation blocks and review status. In progress: generated pages include source citations and draft review metadata.
+- Separate human-approved wiki pages from draft AI pages. In progress: generated pages are written under `wiki/drafts/`.
 
 Exit criteria:
 

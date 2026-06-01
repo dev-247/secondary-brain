@@ -16,6 +16,7 @@ from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
 from scripts.router import ABSTENTION_MESSAGE, synthesize_answer, synthesize_answer_result
 from scripts.search import diagnostic_rows, format_citation, hybrid_search
+from scripts.wiki import write_wiki_draft
 
 console = Console()
 
@@ -151,6 +152,21 @@ def cmd_audit(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_wiki_generate(args: argparse.Namespace) -> int:
+    if not check_qdrant_health():
+        console.print("[red]Qdrant is not running. Start it with: docker compose up -d[/red]")
+        return 1
+
+    results = hybrid_search(args.topic, limit=args.limit)
+    if not results:
+        console.print(f"[yellow]{ABSTENTION_MESSAGE}[/yellow]")
+        return 0
+
+    path = write_wiki_draft(args.topic, results)
+    console.print(f"[green]Draft wiki page written:[/green] {path}")
+    return 0
+
+
 def cmd_chat(_: argparse.Namespace) -> int:
     if not check_qdrant_health():
         console.print("[red]Qdrant is not running. Start it with: docker compose up -d[/red]")
@@ -215,6 +231,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     audit_parser = subparsers.add_parser("audit", help="Run wiki health audit")
     audit_parser.set_defaults(func=cmd_audit)
+
+    wiki_parser = subparsers.add_parser("wiki-generate", help="Generate a cited draft wiki page")
+    wiki_parser.add_argument("topic", help="Topic to generate")
+    wiki_parser.add_argument("--limit", type=int, default=5, help="Number of source chunks to use")
+    wiki_parser.set_defaults(func=cmd_wiki_generate)
 
     chat_parser = subparsers.add_parser("chat", help="Interactive Q&A loop")
     chat_parser.set_defaults(func=cmd_chat)

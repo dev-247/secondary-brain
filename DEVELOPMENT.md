@@ -56,6 +56,12 @@ Inspect search results without answer synthesis:
 uv run python main.py search "hybrid retrieval" --debug
 ```
 
+Generate a cited draft wiki page:
+
+```bash
+uv run python main.py wiki-generate "hybrid retrieval"
+```
+
 Ingest the vault:
 
 ```bash
