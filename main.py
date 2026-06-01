@@ -12,7 +12,12 @@ from rich.table import Table
 from scripts.audit import audit_wiki, print_audit_report
 from scripts.config import VAULT_DIR, WIKI_DIR
 from scripts.doctor import print_doctor_report
-from scripts.graph import extract_graph_from_chunks, indexed_chunks_from_qdrant, relationships_for_entity
+from scripts.graph import (
+    extract_graph_from_chunks,
+    indexed_chunks_from_qdrant,
+    relationships_for_entity,
+    timeline_for_entity,
+)
 from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
 from scripts.router import ABSTENTION_MESSAGE, synthesize_answer, synthesize_answer_result
@@ -193,6 +198,29 @@ def cmd_graph(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_graph_timeline(args: argparse.Namespace) -> int:
+    events = timeline_for_entity(name=args.entity)
+    if not events:
+        console.print(f"[yellow]No timeline events found for {args.entity!r}.[/yellow]")
+        console.print("[dim]Run graph-build after ingesting dated source notes, then try again.[/dim]")
+        return 0
+
+    table = Table(title=f"Timeline: {args.entity}")
+    table.add_column("Date")
+    table.add_column("Entity")
+    table.add_column("Source")
+    table.add_column("Evidence")
+    for event in events[: args.limit]:
+        table.add_row(
+            event.date,
+            event.entity_name,
+            f"{event.source_path}#{event.chunk_index}",
+            event.evidence,
+        )
+    console.print(table)
+    return 0
+
+
 def cmd_wiki_generate(args: argparse.Namespace) -> int:
     if not check_qdrant_health():
         console.print("[red]Qdrant is not running. Start it with: docker compose up -d[/red]")
@@ -300,6 +328,11 @@ def build_parser() -> argparse.ArgumentParser:
     graph_query_parser.add_argument("entity", help="Entity name, such as 'Project Alpha'")
     graph_query_parser.add_argument("--limit", type=int, default=10, help="Maximum relationships to show")
     graph_query_parser.set_defaults(func=cmd_graph)
+
+    timeline_parser = subparsers.add_parser("graph-timeline", help="Show dated graph events for an entity")
+    timeline_parser.add_argument("entity", help="Entity name, such as 'Project Alpha'")
+    timeline_parser.add_argument("--limit", type=int, default=10, help="Maximum timeline events to show")
+    timeline_parser.set_defaults(func=cmd_graph_timeline)
 
     wiki_parser = subparsers.add_parser("wiki-generate", help="Generate a cited draft wiki page")
     wiki_parser.add_argument("topic", help="Topic to generate")

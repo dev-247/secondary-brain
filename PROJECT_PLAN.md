@@ -237,10 +237,10 @@ Phase 4 review on 2026-06-01:
 
 Target: 1-2 weeks
 
-- Extract entities, topics, dates, projects, people, and relationships. In progress: deterministic extraction handles explicit project/topic/date mentions and simple `uses` / `depends on` relationships.
+- Extract entities, topics, dates, projects, people, and relationships. Done for this phase: deterministic extraction handles explicit project/topic/date mentions, dated events, and simple `uses` / `depends on` relationships.
 - Build a local graph store or SQLite-backed graph tables. Done for foundation: SQLite graph tables store normalized entities and source-backed relationships.
-- Add graph-assisted questions such as "how are these ideas connected?" In progress: `graph <entity>` shows inbound and outbound relationships with source evidence.
-- Add contradiction, timeline, and dependency discovery.
+- Add graph-assisted questions such as "how are these ideas connected?" Done for this phase: `graph <entity>` shows inbound and outbound relationships with source evidence.
+- Add contradiction, timeline, and dependency discovery. Done for this phase: audit flags conservative contradiction candidates, `depends on` creates dependency edges, and `graph-timeline <entity>` shows dated events.
 
 Exit criteria:
 
@@ -249,12 +249,20 @@ Exit criteria:
 
 Phase 5 progress on 2026-06-01:
 
-- `make smoke` passes with 49 tests.
+- `make smoke` passes with 51 tests.
 - Added a local SQLite graph store with entity de-duplication by normalized name.
 - Added source-backed relationships that preserve source path, chunk index, and evidence text.
 - Added `graph-build` to scan indexed chunks, extract conservative graph candidates, and store them locally.
 - Added `graph <entity>` to inspect graph connections for an entity with evidence and source chunks.
-- Wrong or low-confidence extracted relationships can be reviewed.
+- Added `graph-timeline <entity>` to inspect dated events for an entity in chronological order.
+
+Phase 5 review on 2026-06-02:
+
+- `make smoke` passes with 51 tests.
+- Graph entities and relationships are stored locally in SQLite and remain source-backed.
+- Deterministic extraction supports projects, topics, ISO dates, `uses`, `depends on`, and dated project events.
+- Graph lookup and timeline lookup are available from the CLI.
+- Remaining gap: extraction is intentionally conservative and pattern-based; richer semantic extraction and human approval workflows can be expanded after the product UI exists.
 
 ### Phase 6: Product Interface and Access Anywhere
 

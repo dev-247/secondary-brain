@@ -32,6 +32,15 @@ class GraphRelationship:
 
 
 @dataclass(frozen=True)
+class GraphTimelineEvent:
+    date: str
+    entity_name: str
+    source_path: str
+    chunk_index: int
+    evidence: str
+
+
+@dataclass(frozen=True)
 class EntityCandidate:
     entity_type: str
     name: str
@@ -115,6 +124,27 @@ def extract_graph_candidates(chunk: dict[str, object]) -> GraphCandidates:
 
     for match in re.finditer(r"\b\d{4}-\d{2}-\d{2}\b", content):
         entities.append(EntityCandidate("date", match.group(0)))
+
+    for sentence in re.split(r"(?<=[.!?])\s+", content):
+        date_match = re.search(r"\b\d{4}-\d{2}-\d{2}\b", sentence)
+        if not date_match:
+            continue
+        for project_match in re.finditer(r"\bProject\s+[A-Z][A-Za-z0-9-]*\b", sentence):
+            project = _clean_candidate_name(project_match.group(0))
+            date = date_match.group(0)
+            entities.append(EntityCandidate("project", project))
+            entities.append(EntityCandidate("date", date))
+            relationships.append(
+                RelationshipCandidate(
+                    subject=project,
+                    predicate="mentioned_on",
+                    object=date,
+                    object_type="date",
+                    source_path=source_path,
+                    chunk_index=chunk_index,
+                    evidence=" ".join(sentence.split()),
+                )
+            )
 
     for predicate, pattern in RELATIONSHIP_PATTERNS:
         for match in pattern.finditer(content):
@@ -368,6 +398,43 @@ def relationships_for_entity(
             source_path=str(row[6]),
             chunk_index=int(row[7]),
             evidence=str(row[8]),
+        )
+        for row in rows
+    ]
+
+
+def timeline_for_entity(
+    db_path: Path = GRAPH_DB_PATH,
+    name: str = "",
+) -> list[GraphTimelineEvent]:
+    init_graph_db(db_path)
+    normalized_name = _normalize_name(name)
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                object.name,
+                subject.name,
+                relationship.source_path,
+                relationship.chunk_index,
+                relationship.evidence
+            FROM graph_relationships AS relationship
+            JOIN graph_entities AS subject ON subject.id = relationship.subject_id
+            JOIN graph_entities AS object ON object.id = relationship.object_id
+            WHERE subject.normalized_name = ?
+              AND object.entity_type = 'date'
+            ORDER BY object.name, relationship.source_path, relationship.chunk_index
+            """,
+            (normalized_name,),
+        ).fetchall()
+
+    return [
+        GraphTimelineEvent(
+            date=str(row[0]),
+            entity_name=str(row[1]),
+            source_path=str(row[2]),
+            chunk_index=int(row[3]),
+            evidence=str(row[4]),
         )
         for row in rows
     ]

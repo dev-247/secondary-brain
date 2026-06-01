@@ -13,6 +13,7 @@ from scripts.graph import (
     list_relationships,
     relationships_for_entity,
     store_graph_candidates,
+    timeline_for_entity,
     upsert_entity,
 )
 
@@ -93,6 +94,22 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(candidates.relationships[0].source_path, "project-alpha.md")
         self.assertEqual(candidates.relationships[0].chunk_index, 3)
 
+    def test_extract_graph_candidates_links_project_dates_for_timeline(self) -> None:
+        candidates = extract_graph_candidates(
+            {
+                "path": "project-alpha.md",
+                "chunk_index": 4,
+                "content": "Project Alpha launched on 2026-06-01.",
+            }
+        )
+
+        self.assertIn(("date", "2026-06-01"), [(entity.entity_type, entity.name) for entity in candidates.entities])
+        self.assertEqual(len(candidates.relationships), 1)
+        self.assertEqual(candidates.relationships[0].subject, "Project Alpha")
+        self.assertEqual(candidates.relationships[0].predicate, "mentioned_on")
+        self.assertEqual(candidates.relationships[0].object, "2026-06-01")
+        self.assertEqual(candidates.relationships[0].object_type, "date")
+
     def test_store_graph_candidates_persists_entities_and_relationships(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             db_path = Path(directory) / "graph.sqlite"
@@ -172,6 +189,32 @@ class GraphTests(unittest.TestCase):
                 ("Project Beta", "depends_on", "Project Alpha"),
             ],
         )
+
+    def test_timeline_for_entity_returns_date_relationships_in_order(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "graph.sqlite"
+            extract_graph_from_chunks(
+                [
+                    {
+                        "path": "alpha-2.md",
+                        "chunk_index": 1,
+                        "content": "Project Alpha shipped beta on 2026-06-02.",
+                    },
+                    {
+                        "path": "alpha-1.md",
+                        "chunk_index": 0,
+                        "content": "Project Alpha launched on 2026-06-01.",
+                    },
+                ],
+                db_path=db_path,
+            )
+
+            events = timeline_for_entity(db_path, "Project Alpha")
+
+        self.assertEqual([event.date for event in events], ["2026-06-01", "2026-06-02"])
+        self.assertEqual(events[0].entity_name, "Project Alpha")
+        self.assertEqual(events[0].source_path, "alpha-1.md")
+        self.assertEqual(events[0].chunk_index, 0)
 
 
 if __name__ == "__main__":
