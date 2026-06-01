@@ -214,13 +214,13 @@ Target: 1 week
 - Add stale-topic refresh suggestions based on indexed documents.
 - Add contradiction candidates using retrieved claims and cited excerpts.
 - Store generated wiki pages with citation blocks and review status. In progress: generated pages include source citations and draft review metadata.
-- Separate human-approved wiki pages from draft AI pages. In progress: generated pages are written under `wiki/drafts/`.
+- Separate human-approved wiki pages from draft AI pages. In progress: generated pages are written under `wiki/drafts/`, and audit now reports draft versus reviewed wiki pages separately.
 
 Exit criteria:
 
 - The wiki becomes a browsable organized memory layer.
 - Generated pages cite original sources.
-- Draft pages are clearly marked as generated until reviewed.
+- Draft pages are clearly marked as generated until reviewed, and audit lists drafts that still need human review.
 
 ### Phase 5: Graph Memory and Higher-Level Insight
 

@@ -20,6 +20,19 @@ def _wiki_files(root: Path | None = None) -> list[Path]:
     return sorted(path for path in root.rglob("*.md") if path.is_file())
 
 
+def _review_status(path: Path) -> str:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if not text.startswith("---"):
+        return "unknown"
+    lines = text.splitlines()
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if line.startswith("review_status:"):
+            return line.split(":", 1)[1].strip() or "unknown"
+    return "unknown"
+
+
 def audit_wiki(root: Path | None = None) -> dict[str, object]:
     root = root or WIKI_DIR
     root.mkdir(parents=True, exist_ok=True)
@@ -28,10 +41,17 @@ def audit_wiki(root: Path | None = None) -> dict[str, object]:
 
     stale: list[str] = []
     topics: list[str] = []
+    draft_files: list[str] = []
+    reviewed_files: list[str] = []
     for path in files:
         modified = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
         relative = path.relative_to(root).as_posix()
         topics.append(relative)
+        status = _review_status(path)
+        if status == "draft" or relative.startswith("drafts/"):
+            draft_files.append(relative)
+        elif status == "reviewed":
+            reviewed_files.append(relative)
         if modified < cutoff:
             stale.append(relative)
 
@@ -48,6 +68,10 @@ def audit_wiki(root: Path | None = None) -> dict[str, object]:
         "wiki_files": len(files),
         "stale_files": stale,
         "topics": topics,
+        "draft_files": draft_files,
+        "reviewed_files": reviewed_files,
+        "draft_count": len(draft_files),
+        "reviewed_count": len(reviewed_files),
         "indexed_chunks": indexed_chunks,
         "qdrant_ok": qdrant_ok,
     }
@@ -60,6 +84,8 @@ def print_audit_report(report: dict[str, object]) -> None:
     table.add_row("Qdrant healthy", "yes" if report["qdrant_ok"] else "no")
     table.add_row("Indexed chunks", str(report["indexed_chunks"]))
     table.add_row("Wiki articles", str(report["wiki_files"]))
+    table.add_row("Draft wiki pages", str(report["draft_count"]))
+    table.add_row("Reviewed wiki pages", str(report["reviewed_count"]))
     table.add_row("Stale articles (>90d)", str(len(report["stale_files"])))
     console.print(table)
 
@@ -67,6 +93,12 @@ def print_audit_report(report: dict[str, object]) -> None:
     if stale_files:
         console.print("\n[yellow]Stale wiki content:[/yellow]")
         for item in stale_files:
+            console.print(f"  - {item}")
+
+    draft_files = report["draft_files"]
+    if draft_files:
+        console.print("\n[yellow]Draft wiki pages awaiting review:[/yellow]")
+        for item in draft_files:
             console.print(f"  - {item}")
 
     topics = report["topics"]
