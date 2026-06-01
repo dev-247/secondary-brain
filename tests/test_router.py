@@ -9,6 +9,7 @@ from scripts.router import (
     assess_source_coverage,
     choose_mode,
     normalize_answer,
+    validate_answer_citations,
     synthesize_answer,
     synthesize_answer_result,
 )
@@ -71,6 +72,11 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(normalize_answer("I don't know."), ABSTENTION_MESSAGE)
         self.assertEqual(normalize_answer("No information found in your knowledge base."), ABSTENTION_MESSAGE)
 
+    def test_validate_answer_citations_requires_bracketed_sources(self) -> None:
+        self.assertTrue(validate_answer_citations("Project Alpha keeps documents local [1]."))
+        self.assertFalse(validate_answer_citations("Project Alpha keeps documents local."))
+        self.assertTrue(validate_answer_citations(ABSTENTION_MESSAGE))
+
     def test_synthesize_answer_result_includes_confidence(self) -> None:
         with patch("scripts.router._chat_ollama", return_value="Grounded answer [1]."):
             result = synthesize_answer_result(
@@ -82,6 +88,18 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(result.answer, "Grounded answer [1].")
         self.assertEqual(result.mode, "fast")
         self.assertEqual(result.confidence, "high")
+
+    def test_synthesize_rejects_uncited_model_answer(self) -> None:
+        with patch("scripts.router._chat_ollama", return_value="Grounded answer without citation."):
+            result = synthesize_answer_result(
+                "What is the project alpha goal?",
+                [source("Project Alpha goal is grounded answers with citations.")],
+                mode="fast",
+            )
+
+        self.assertEqual(result.answer, ABSTENTION_MESSAGE)
+        self.assertEqual(result.mode, "none")
+        self.assertEqual(result.confidence, "low")
 
 
 if __name__ == "__main__":

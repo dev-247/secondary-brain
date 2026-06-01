@@ -39,6 +39,7 @@ MODEL_ABSTENTION_PATTERNS = {
     "cannot answer",
     "no relevant information",
 }
+CITATION_PATTERN = re.compile(r"\[\d+\]")
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,12 @@ def normalize_answer(answer: str) -> str:
     if normalized in MODEL_ABSTENTION_PATTERNS:
         return ABSTENTION_MESSAGE
     return cleaned
+
+
+def validate_answer_citations(answer: str) -> bool:
+    if answer == ABSTENTION_MESSAGE:
+        return True
+    return bool(CITATION_PATTERN.search(answer))
 
 
 def _build_context(sources: list[SearchResult]) -> str:
@@ -200,6 +207,8 @@ def synthesize_answer_result(
     answer = normalize_answer(answer)
     if answer == ABSTENTION_MESSAGE:
         return AnswerResult(answer, "none", "low", coverage)
+    if not validate_answer_citations(answer):
+        return AnswerResult(ABSTENTION_MESSAGE, "none", "low", coverage)
 
     return AnswerResult(answer, selected_mode, coverage.confidence, coverage)
 

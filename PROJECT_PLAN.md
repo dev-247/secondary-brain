@@ -194,7 +194,7 @@ Target: 3-5 days
 Exit criteria:
 
 - The system refuses weakly supported answers. In progress: source coverage checks now gate synthesis.
-- Every factual answer includes citations.
+- Every factual answer includes citations. In progress: uncited model answers are rejected.
 - Local and cloud modes share the same trust rules.
 
 ### Phase 4: LLM Wiki Memory
