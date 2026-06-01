@@ -26,7 +26,8 @@ class IncrementalIngestTests(unittest.TestCase):
                             with patch("scripts.qdrant_setup.get_client", return_value=client):
                                 with patch("scripts.ingest.get_client", return_value=client):
                                     with patch("scripts.search.get_client", return_value=client):
-                                        return ingest_vault(vault, metadata_path=metadata)
+                                        with patch("scripts.ingest.check_qdrant_health", return_value=True):
+                                            return ingest_vault(vault, metadata_path=metadata)
 
     def test_second_ingest_skips_unchanged_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

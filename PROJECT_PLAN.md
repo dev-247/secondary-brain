@@ -151,7 +151,7 @@ Exit criteria:
 
 Phase 1 review on 2026-05-31:
 
-- `make smoke` passes with 23 tests.
+- `make smoke` passes with 28 tests.
 - The repo is clean.
 - The real local audit reports 3 indexed chunks.
 - Remaining ingestion polish is deduplication across files and deeper real-PDF page extraction, both deferred because Phase 2 retrieval quality work is now more valuable.
@@ -160,32 +160,40 @@ Phase 1 review on 2026-05-31:
 
 Target: 3-5 days
 
-- Build a small evaluation set of real user questions. In progress: 10 fixture-backed evaluation questions exist.
-- Measure recall of expected source chunks. In progress: current deterministic benchmark reports recall@k.
-- Replace keyword-overlap reranking with a stronger local or API reranker. In progress: reranking is now pluggable with weighted lexical and lexical-only strategies; heavier local/API rerankers remain optional.
-- Add retrieval diagnostics to show ranking details. In progress: result rank, final score, fused score, lexical score, citation, chunk, heading, path, and preview are available; separate dense/sparse prefetch rankings remain future polish.
+- Build a small evaluation set of real user questions. Done: 10 fixture-backed evaluation questions exist.
+- Measure recall of expected source chunks. Done: current deterministic benchmark reports recall@k.
+- Replace keyword-overlap reranking with a stronger local or API reranker. Done for this phase: reranking is now pluggable with weighted lexical and lexical-only strategies; heavier local/API rerankers remain optional future work.
+- Add retrieval diagnostics to show ranking details. Done for this phase: result rank, final score, fused score, lexical score, citation, chunk, heading, path, and preview are available; separate dense/sparse prefetch rankings remain future polish.
 - Add commands for `eval` and `search --debug`. Done.
-- Track retrieval quality before and after ranking changes. In progress: latest eval JSON report is written to `reports/retrieval-eval-latest.json`.
+- Track retrieval quality before and after ranking changes. Done: latest eval JSON report is written to `reports/retrieval-eval-latest.json`.
 
 Exit criteria:
 
 - At least 10 evaluation questions exist. Done.
 - The system reports whether expected sources were retrieved. Done.
-- Retrieval changes are measured instead of guessed. In progress: eval reports capture recall and per-question ranks.
+- Retrieval changes are measured instead of guessed. Done: eval reports capture recall and per-question ranks.
+
+Phase 2 review on 2026-05-31:
+
+- `make smoke` passes with 28 tests.
+- Retrieval evaluation passes 10/10 fixture-backed questions.
+- Current recall@k is 100% on the deterministic fixture benchmark.
+- Search diagnostics show rank, final score, fused score, lexical score, path, heading, chunk, citation, and preview.
+- Remaining retrieval polish is deeper dense/sparse prefetch breakdown and optional model/API rerankers, both deferred until real-user evaluation data justifies them.
 
 ### Phase 3: Answer Quality and Trust
 
 Target: 3-5 days
 
 - Strengthen prompt templates for grounded answers.
-- Add source coverage checks before synthesis.
+- Add source coverage checks before synthesis. In progress: weak source coverage is now refused before LLM synthesis.
 - Add confidence labels based on retrieval strength and source agreement.
 - Make abstention behavior consistent.
 - Add answer tests with mocked retrieval and mocked LLM responses.
 
 Exit criteria:
 
-- The system refuses weakly supported answers.
+- The system refuses weakly supported answers. In progress: source coverage checks now gate synthesis.
 - Every factual answer includes citations.
 - Local and cloud modes share the same trust rules.
 

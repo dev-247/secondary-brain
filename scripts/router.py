@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 import httpx
 
@@ -25,6 +26,49 @@ If the context does not contain enough information, say exactly:
 "No information found in your knowledge base."
 Every factual claim must reference a source using [1], [2], etc.
 Do not invent facts or sources."""
+
+MIN_SOURCE_SCORE = 0.2
+MIN_LEXICAL_COVERAGE = 0.25
+
+
+@dataclass(frozen=True)
+class SourceCoverage:
+    supported: bool
+    confidence: str
+    lexical_coverage: float
+    best_score: float
+
+
+def _query_terms(query: str) -> set[str]:
+    return {
+        term
+        for term in re.findall(r"[a-zA-Z0-9]+", query.lower())
+        if len(term) > 2
+    }
+
+
+def assess_source_coverage(query: str, sources: list[SearchResult]) -> SourceCoverage:
+    if not sources:
+        return SourceCoverage(False, "low", 0.0, 0.0)
+
+    terms = _query_terms(query)
+    combined = " ".join(source.content.lower() for source in sources)
+    lexical_coverage = 1.0 if not terms else sum(1 for term in terms if term in combined) / len(terms)
+    best_score = max(source.score for source in sources)
+    best_lexical_score = max((source.lexical_score for source in sources), default=0.0)
+    supported = (
+        best_score >= MIN_SOURCE_SCORE
+        and (lexical_coverage >= MIN_LEXICAL_COVERAGE or best_lexical_score >= MIN_LEXICAL_COVERAGE)
+    )
+
+    if supported and lexical_coverage >= 0.6:
+        confidence = "high"
+    elif supported:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
+    return SourceCoverage(supported, confidence, lexical_coverage, best_score)
 
 
 def _build_context(sources: list[SearchResult]) -> str:
@@ -110,6 +154,10 @@ def synthesize_answer(
     force_deep: bool = False,
 ) -> tuple[str, str]:
     if not sources:
+        return "No information found in your knowledge base.", "none"
+
+    coverage = assess_source_coverage(query, sources)
+    if not coverage.supported:
         return "No information found in your knowledge base.", "none"
 
     context = _build_context(sources)

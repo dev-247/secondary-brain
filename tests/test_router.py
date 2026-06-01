@@ -2,7 +2,20 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.router import choose_mode
+from scripts.router import assess_source_coverage, choose_mode, synthesize_answer
+from scripts.search import SearchResult
+
+
+def source(content: str, score: float = 0.7, lexical_score: float = 0.5) -> SearchResult:
+    return SearchResult(
+        content=content,
+        filename="note.md",
+        path="note.md",
+        heading="Note",
+        chunk_index=0,
+        score=score,
+        lexical_score=lexical_score,
+    )
 
 
 class RouterTests(unittest.TestCase):
@@ -16,6 +29,34 @@ class RouterTests(unittest.TestCase):
 
     def test_force_deep_overrides_query_shape(self) -> None:
         self.assertEqual(choose_mode("Short?", force_deep=True), "deep")
+
+    def test_source_coverage_accepts_supported_query(self) -> None:
+        coverage = assess_source_coverage(
+            "What is the project alpha goal?",
+            [source("Project Alpha goal is grounded answers with citations.")],
+        )
+
+        self.assertTrue(coverage.supported)
+        self.assertEqual(coverage.confidence, "high")
+
+    def test_source_coverage_rejects_weak_sources(self) -> None:
+        coverage = assess_source_coverage(
+            "What is the project alpha goal?",
+            [source("Morning hydration and evening walks.", score=0.1, lexical_score=0.0)],
+        )
+
+        self.assertFalse(coverage.supported)
+        self.assertEqual(coverage.confidence, "low")
+
+    def test_synthesize_refuses_when_source_coverage_is_weak(self) -> None:
+        answer, mode = synthesize_answer(
+            "What is the project alpha goal?",
+            [source("Morning hydration and evening walks.", score=0.1, lexical_score=0.0)],
+            mode="fast",
+        )
+
+        self.assertEqual(answer, "No information found in your knowledge base.")
+        self.assertEqual(mode, "none")
 
 
 if __name__ == "__main__":
