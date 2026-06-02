@@ -89,6 +89,8 @@ class WebTests(unittest.TestCase):
         self.assertIn("Command Center", html)
         self.assertIn("Next actions", html)
         self.assertIn("Local memory map", html)
+        self.assertIn("table-layout: fixed", html)
+        self.assertIn("overflow-wrap: anywhere", html)
         self.assertIn("Ask", html)
         self.assertIn("Chat history", html)
         self.assertIn("Ingestion", html)

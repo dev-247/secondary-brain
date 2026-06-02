@@ -690,8 +690,15 @@ def render_dashboard(
       grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr);
       gap: 16px;
     }}
-    table {{ width: 100%; border-collapse: collapse; }}
-    th, td {{ border-bottom: 1px solid var(--line); padding: 9px 6px; text-align: left; vertical-align: top; }}
+    table {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
+    th, td {{
+      border-bottom: 1px solid var(--line);
+      padding: 9px 6px;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }}
     th {{ font-size: 12px; color: var(--muted); font-weight: 700; text-transform: uppercase; }}
     .command-list {{ display: grid; gap: 10px; }}
     .action-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }}
@@ -728,7 +735,17 @@ def render_dashboard(
       border-radius: 6px;
       padding: 12px;
     }}
-    code {{ background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }}
+    code {{
+      display: inline-block;
+      max-width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 2px 6px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: normal;
+    }}
     @media (max-width: 900px) {{
       .shell {{ grid-template-columns: 1fr; }}
       aside {{ border-right: 0; border-bottom: 1px solid var(--line); }}
