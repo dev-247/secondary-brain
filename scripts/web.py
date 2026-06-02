@@ -8,13 +8,16 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from scripts.config import VAULT_DIR, WIKI_DIR
-from scripts.graph import list_relationships
+from scripts.graph import extract_graph_from_chunks, indexed_chunks_from_qdrant, list_relationships
+from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
 from scripts.router import ABSTENTION_MESSAGE, synthesize_answer_result
 from scripts.search import diagnostic_rows, format_citation, hybrid_search
 
 CHAT_HISTORY_LIMIT = 20
 CHAT_HISTORY: list[dict[str, str]] = []
+ACTION_HISTORY_LIMIT = 12
+ACTION_HISTORY: list[dict[str, str]] = []
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
@@ -206,6 +209,53 @@ def build_answer_payload(query: str, *, limit: int = 5) -> dict[str, object]:
     }
 
 
+def get_action_history() -> list[dict[str, str]]:
+    return list(ACTION_HISTORY)
+
+
+def _remember_action(item: dict[str, str]) -> None:
+    ACTION_HISTORY.insert(0, item)
+    del ACTION_HISTORY[ACTION_HISTORY_LIMIT:]
+
+
+def build_ingest_action_payload() -> dict[str, object]:
+    try:
+        stats = ingest_vault(VAULT_DIR)
+    except RuntimeError as exc:
+        payload: dict[str, object] = {
+            "status": "error",
+            "message": str(exc),
+            "stats": {},
+        }
+        _remember_action({"name": "ingest", "status": "error", "message": str(exc)})
+        return payload
+
+    message = f"Ingested {stats['chunks']} chunks from {stats['files']} files."
+    payload = {
+        "status": "ok",
+        "message": message,
+        "stats": stats,
+    }
+    _remember_action({"name": "ingest", "status": "ok", "message": message})
+    return payload
+
+
+def build_graph_action_payload(*, limit: int = 500) -> dict[str, object]:
+    chunks = indexed_chunks_from_qdrant(limit=limit)
+    stats = extract_graph_from_chunks(chunks)
+    message = (
+        f"Built graph from {stats['chunks']} chunks "
+        f"with {stats['relationships']} relationships."
+    )
+    payload = {
+        "status": "ok",
+        "message": message,
+        "stats": stats,
+    }
+    _remember_action({"name": "graph-build", "status": "ok", "message": message})
+    return payload
+
+
 def _status_chip(ready: bool) -> str:
     label = "ready" if ready else "down"
     tone = "good" if ready else "bad"
@@ -220,11 +270,13 @@ def render_dashboard(
     search_payload: dict[str, object] | None = None,
     answer_payload: dict[str, object] | None = None,
     chat_history: list[dict[str, str]] | None = None,
+    action_history: list[dict[str, str]] | None = None,
 ) -> str:
     source_files = source_files or []
     search_payload = search_payload or {"query": "", "results": []}
     answer_payload = answer_payload or {"query": "", "answer": "", "sources": []}
     chat_history = chat_history or []
+    action_history = action_history or []
     wiki_rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(page['title'])}</td>"
@@ -256,6 +308,13 @@ def render_dashboard(
         "</tr>"
         for item in chat_history[:8]
     ) or '<tr><td colspan="2" class="muted">Ask a question to start chat history.</td></tr>'
+    action_rows = "\n".join(
+        "<tr>"
+        f"<td>{html.escape(item['name'])}<br><span class=\"muted\">{html.escape(item['status'])}</span></td>"
+        f"<td>{html.escape(item['message'])}</td>"
+        "</tr>"
+        for item in action_history[:8]
+    ) or '<tr><td colspan="2" class="muted">Run an operation to see activity here.</td></tr>'
 
     return f"""<!doctype html>
 <html lang="en">
@@ -334,6 +393,13 @@ def render_dashboard(
     th, td {{ border-bottom: 1px solid var(--line); padding: 9px 6px; text-align: left; vertical-align: top; }}
     th {{ font-size: 12px; color: var(--muted); font-weight: 700; text-transform: uppercase; }}
     .command-list {{ display: grid; gap: 10px; }}
+    .action-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }}
+    .action-card {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #ffffff;
+    }}
     .search-form {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-bottom: 12px; }}
     input, button {{
       min-height: 36px;
@@ -378,6 +444,7 @@ def render_dashboard(
         <a href="#ingestion">Ingestion</a>
         <a href="#ask">Ask</a>
         <a href="#search">Search</a>
+        <a href="#operations">Operations</a>
         <a href="#sources">Sources</a>
         <a href="#wiki">Wiki</a>
         <a href="#graph">Graph</a>
@@ -391,6 +458,26 @@ def render_dashboard(
         <div class="panel"><h2>Graph</h2><div class="metric">{status['graph_relationships']}</div><div class="muted">relationships</div></div>
       </section>
       <section class="workbench">
+        <div class="panel" id="operations">
+          <h2>Operations</h2>
+          <div class="action-grid">
+            <form action="/action/ingest" method="post" class="action-card">
+              <strong>Ingest vault</strong>
+              <p class="muted">Index changed files, remove deleted files, and refresh searchable chunks.</p>
+              <button type="submit">Run ingest</button>
+            </form>
+            <form action="/action/graph-build" method="post" class="action-card">
+              <strong>Build graph</strong>
+              <p class="muted">Extract source-backed entities, relationships, dependencies, and dated events.</p>
+              <button type="submit">Build graph</button>
+            </form>
+          </div>
+          <h2>Activity</h2>
+          <table>
+            <thead><tr><th>Action</th><th>Result</th></tr></thead>
+            <tbody>{action_rows}</tbody>
+          </table>
+        </div>
         <div class="panel" id="ask">
           <h2>Ask</h2>
           <form action="/ask" method="get" class="command-list">
@@ -538,6 +625,7 @@ class SecondBrainWebHandler(BaseHTTPRequestHandler):
                     source_files=list_source_files(),
                     search_payload=build_search_payload(query),
                     chat_history=get_chat_history(),
+                    action_history=get_action_history(),
                 )
             )
             return
@@ -552,6 +640,7 @@ class SecondBrainWebHandler(BaseHTTPRequestHandler):
                     source_files=list_source_files(),
                     answer_payload=answer_payload,
                     chat_history=get_chat_history(),
+                    action_history=get_action_history(),
                 )
             )
             return
@@ -579,6 +668,44 @@ class SecondBrainWebHandler(BaseHTTPRequestHandler):
                     wiki_pages=list_wiki_pages(),
                     source_files=list_source_files(),
                     chat_history=get_chat_history(),
+                    action_history=get_action_history(),
+                )
+            )
+            return
+        self._send_json({"error": "not found"}, status=404)
+
+    def do_POST(self) -> None:
+        if not self._authorized():
+            self._send_json({"error": "unauthorized"}, status=401)
+            return
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/ingest":
+            self._send_json(build_ingest_action_payload())
+            return
+        if parsed.path == "/api/graph-build":
+            self._send_json(build_graph_action_payload())
+            return
+        if parsed.path == "/action/ingest":
+            build_ingest_action_payload()
+            self._send_html(
+                render_dashboard(
+                    status=build_status_payload(),
+                    wiki_pages=list_wiki_pages(),
+                    source_files=list_source_files(),
+                    chat_history=get_chat_history(),
+                    action_history=get_action_history(),
+                )
+            )
+            return
+        if parsed.path == "/action/graph-build":
+            build_graph_action_payload()
+            self._send_html(
+                render_dashboard(
+                    status=build_status_payload(),
+                    wiki_pages=list_wiki_pages(),
+                    source_files=list_source_files(),
+                    chat_history=get_chat_history(),
+                    action_history=get_action_history(),
                 )
             )
             return

@@ -8,6 +8,8 @@ from unittest.mock import patch
 from scripts.search import SearchResult
 from scripts.web import (
     build_answer_payload,
+    build_graph_action_payload,
+    build_ingest_action_payload,
     build_search_payload,
     build_status_payload,
     clear_chat_history,
@@ -153,6 +155,34 @@ class WebTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             validate_web_bind("0.0.0.0", "")
+
+    def test_build_ingest_action_payload_returns_ingest_stats(self) -> None:
+        with patch("scripts.web.ingest_vault") as ingest:
+            ingest.return_value = {
+                "files": 2,
+                "chunks": 4,
+                "skipped": 1,
+                "deleted": 0,
+                "failed": 0,
+                "failed_files": [],
+            }
+
+            payload = build_ingest_action_payload()
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["stats"]["chunks"], 4)
+        self.assertEqual(payload["message"], "Ingested 4 chunks from 2 files.")
+
+    def test_build_graph_action_payload_returns_graph_stats(self) -> None:
+        with (
+            patch("scripts.web.indexed_chunks_from_qdrant", return_value=[{"content": "Project Alpha uses Local First AI."}]),
+            patch("scripts.web.extract_graph_from_chunks", return_value={"chunks": 1, "entities": 2, "relationships": 1}),
+        ):
+            payload = build_graph_action_payload(limit=20)
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["stats"]["relationships"], 1)
+        self.assertEqual(payload["message"], "Built graph from 1 chunks with 1 relationships.")
 
 
 if __name__ == "__main__":
