@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -14,6 +15,23 @@ from scripts.search import diagnostic_rows, format_citation, hybrid_search
 
 CHAT_HISTORY_LIMIT = 20
 CHAT_HISTORY: list[dict[str, str]] = []
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+def web_auth_token() -> str:
+    return os.getenv("SECOND_BRAIN_WEB_TOKEN", "").strip()
+
+
+def validate_web_bind(host: str, auth_token: str | None = None) -> None:
+    token = web_auth_token() if auth_token is None else auth_token
+    if host in LOCAL_HOSTS:
+        return
+    if token:
+        return
+    raise ValueError(
+        "Non-local web access requires SECOND_BRAIN_WEB_TOKEN. "
+        "Use localhost for local-only access or set a token before binding to the network."
+    )
 
 
 def _markdown_files(root: Path) -> list[Path]:
@@ -454,6 +472,15 @@ def render_source_page(
 
 
 class SecondBrainWebHandler(BaseHTTPRequestHandler):
+    def _authorized(self) -> bool:
+        token = web_auth_token()
+        if not token:
+            return True
+        parsed = urlparse(self.path)
+        query_token = parse_qs(parsed.query).get("token", [""])[0]
+        header_token = self.headers.get("X-Second-Brain-Token", "")
+        return query_token == token or header_token == token
+
     def _send_json(self, payload: object, status: int = 200) -> None:
         body = json.dumps(payload, indent=2).encode("utf-8")
         self.send_response(status)
@@ -471,6 +498,9 @@ class SecondBrainWebHandler(BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
     def do_GET(self) -> None:
+        if not self._authorized():
+            self._send_json({"error": "unauthorized"}, status=401)
+            return
         parsed = urlparse(self.path)
         if parsed.path == "/api/status":
             self._send_json(build_status_payload())
@@ -559,6 +589,7 @@ class SecondBrainWebHandler(BaseHTTPRequestHandler):
 
 
 def run_web_server(host: str = "127.0.0.1", port: int = 8765) -> None:
+    validate_web_bind(host)
     server = ThreadingHTTPServer((host, port), SecondBrainWebHandler)
     print(f"Second Brain web UI running at http://{host}:{port}")
     server.serve_forever()

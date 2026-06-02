@@ -16,6 +16,7 @@ from scripts.web import (
     list_wiki_pages,
     read_source_file,
     render_dashboard,
+    validate_web_bind,
 )
 
 
@@ -145,6 +146,13 @@ class WebTests(unittest.TestCase):
         self.assertEqual(payload["confidence"], "high")
         self.assertEqual(payload["sources"][0]["path"], "alpha.md")
         self.assertEqual(get_chat_history()[0]["question"], "What is Project Alpha?")
+
+    def test_validate_web_bind_requires_token_for_non_local_host(self) -> None:
+        validate_web_bind("127.0.0.1", "")
+        validate_web_bind("0.0.0.0", "secret-token")
+
+        with self.assertRaises(ValueError):
+            validate_web_bind("0.0.0.0", "")
 
 
 if __name__ == "__main__":
