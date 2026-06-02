@@ -95,6 +95,16 @@ What it does:
 7. Review and promote drafts when they are trustworthy.
 8. Use Sources, Wiki, and Graph views to verify provenance.
 
+## Activity history
+
+The web UI stores recent Ask history and operation results in:
+
+```text
+data/web_activity.sqlite
+```
+
+This is local product memory for the operator cockpit. It survives server restarts, stays on the machine, and should be included with normal local backups if you want to preserve UI activity history.
+
 ## Safety
 
 The web UI binds to localhost by default. For private network use, read `PRIVATE_ACCESS.md`.

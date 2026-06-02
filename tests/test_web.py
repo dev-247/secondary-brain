@@ -14,10 +14,14 @@ from scripts.web import (
     build_status_payload,
     build_wiki_generate_action_payload,
     build_wiki_promote_action_payload,
+    clear_action_history,
     clear_chat_history,
+    get_action_history,
     get_chat_history,
     list_source_files,
     list_wiki_pages,
+    record_action_history,
+    record_chat_history,
     read_source_file,
     render_dashboard,
     validate_web_bind,
@@ -151,6 +155,22 @@ class WebTests(unittest.TestCase):
         self.assertEqual(payload["sources"][0]["path"], "alpha.md")
         self.assertEqual(get_chat_history()[0]["question"], "What is Project Alpha?")
 
+    def test_chat_history_persists_in_activity_db(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "activity.sqlite"
+
+            record_chat_history(
+                "What is Project Alpha?",
+                "Project Alpha keeps notes local [1].",
+                "fast",
+                "high",
+                db_path=db_path,
+            )
+            history = get_chat_history(db_path=db_path)
+
+        self.assertEqual(history[0]["question"], "What is Project Alpha?")
+        self.assertEqual(history[0]["confidence"], "high")
+
     def test_validate_web_bind_requires_token_for_non_local_host(self) -> None:
         validate_web_bind("127.0.0.1", "")
         validate_web_bind("0.0.0.0", "secret-token")
@@ -159,6 +179,7 @@ class WebTests(unittest.TestCase):
             validate_web_bind("0.0.0.0", "")
 
     def test_build_ingest_action_payload_returns_ingest_stats(self) -> None:
+        clear_action_history()
         with patch("scripts.web.ingest_vault") as ingest:
             ingest.return_value = {
                 "files": 2,
@@ -174,6 +195,22 @@ class WebTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["stats"]["chunks"], 4)
         self.assertEqual(payload["message"], "Ingested 4 chunks from 2 files.")
+        self.assertEqual(get_action_history()[0]["name"], "ingest")
+
+    def test_action_history_persists_in_activity_db(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "activity.sqlite"
+
+            record_action_history(
+                "graph-build",
+                "ok",
+                "Built graph from 1 chunks with 1 relationships.",
+                db_path=db_path,
+            )
+            history = get_action_history(db_path=db_path)
+
+        self.assertEqual(history[0]["name"], "graph-build")
+        self.assertEqual(history[0]["status"], "ok")
 
     def test_build_graph_action_payload_returns_graph_stats(self) -> None:
         with (

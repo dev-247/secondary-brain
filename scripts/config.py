@@ -20,6 +20,7 @@ QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "second_brain")
 QDRANT_PATH = _path("QDRANT_PATH", "data/qdrant")
 METADATA_DB_PATH = _path("METADATA_DB_PATH", "data/metadata.sqlite")
 GRAPH_DB_PATH = _path("GRAPH_DB_PATH", "data/graph.sqlite")
+WEB_ACTIVITY_DB_PATH = _path("WEB_ACTIVITY_DB_PATH", "data/web_activity.sqlite")
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")

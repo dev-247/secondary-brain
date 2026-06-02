@@ -3,11 +3,13 @@ from __future__ import annotations
 import html
 import json
 import os
+import sqlite3
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from scripts.config import VAULT_DIR, WIKI_DIR
+from scripts.config import VAULT_DIR, WEB_ACTIVITY_DB_PATH, WIKI_DIR
 from scripts.graph import extract_graph_from_chunks, indexed_chunks_from_qdrant, list_relationships
 from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
@@ -16,9 +18,7 @@ from scripts.search import diagnostic_rows, format_citation, hybrid_search
 from scripts.wiki import promote_wiki_draft, write_wiki_draft
 
 CHAT_HISTORY_LIMIT = 20
-CHAT_HISTORY: list[dict[str, str]] = []
 ACTION_HISTORY_LIMIT = 12
-ACTION_HISTORY: list[dict[str, str]] = []
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
@@ -142,17 +142,107 @@ def build_search_payload(query: str, *, limit: int = 5) -> dict[str, object]:
     }
 
 
-def clear_chat_history() -> None:
-    CHAT_HISTORY.clear()
+def _now_utc() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def get_chat_history() -> list[dict[str, str]]:
-    return list(CHAT_HISTORY)
+def init_web_activity_db(db_path: Path = WEB_ACTIVITY_DB_PATH) -> None:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chat_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                confidence TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS action_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                name TEXT NOT NULL,
+                status TEXT NOT NULL,
+                message TEXT NOT NULL
+            )
+            """
+        )
+
+
+def record_chat_history(
+    question: str,
+    answer: str,
+    mode: str,
+    confidence: str,
+    *,
+    db_path: Path = WEB_ACTIVITY_DB_PATH,
+) -> None:
+    init_web_activity_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO chat_history (created_at, question, answer, mode, confidence)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (_now_utc(), question, answer, mode, confidence),
+        )
+        conn.execute(
+            """
+            DELETE FROM chat_history
+            WHERE id NOT IN (
+                SELECT id FROM chat_history ORDER BY id DESC LIMIT ?
+            )
+            """,
+            (CHAT_HISTORY_LIMIT,),
+        )
+
+
+def clear_chat_history(*, db_path: Path = WEB_ACTIVITY_DB_PATH) -> None:
+    init_web_activity_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("DELETE FROM chat_history")
+
+
+def get_chat_history(
+    *,
+    db_path: Path = WEB_ACTIVITY_DB_PATH,
+    limit: int = CHAT_HISTORY_LIMIT,
+) -> list[dict[str, str]]:
+    init_web_activity_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT created_at, question, answer, mode, confidence
+            FROM chat_history
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [
+        {
+            "created_at": row[0],
+            "question": row[1],
+            "answer": row[2],
+            "mode": row[3],
+            "confidence": row[4],
+        }
+        for row in rows
+    ]
 
 
 def _remember_chat_item(item: dict[str, str]) -> None:
-    CHAT_HISTORY.insert(0, item)
-    del CHAT_HISTORY[CHAT_HISTORY_LIMIT:]
+    record_chat_history(
+        item["question"],
+        item["answer"],
+        item["mode"],
+        item["confidence"],
+    )
 
 
 def build_answer_payload(query: str, *, limit: int = 5) -> dict[str, object]:
@@ -210,13 +300,68 @@ def build_answer_payload(query: str, *, limit: int = 5) -> dict[str, object]:
     }
 
 
-def get_action_history() -> list[dict[str, str]]:
-    return list(ACTION_HISTORY)
+def record_action_history(
+    name: str,
+    status: str,
+    message: str,
+    *,
+    db_path: Path = WEB_ACTIVITY_DB_PATH,
+) -> None:
+    init_web_activity_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO action_history (created_at, name, status, message)
+            VALUES (?, ?, ?, ?)
+            """,
+            (_now_utc(), name, status, message),
+        )
+        conn.execute(
+            """
+            DELETE FROM action_history
+            WHERE id NOT IN (
+                SELECT id FROM action_history ORDER BY id DESC LIMIT ?
+            )
+            """,
+            (ACTION_HISTORY_LIMIT,),
+        )
+
+
+def clear_action_history(*, db_path: Path = WEB_ACTIVITY_DB_PATH) -> None:
+    init_web_activity_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("DELETE FROM action_history")
+
+
+def get_action_history(
+    *,
+    db_path: Path = WEB_ACTIVITY_DB_PATH,
+    limit: int = ACTION_HISTORY_LIMIT,
+) -> list[dict[str, str]]:
+    init_web_activity_db(db_path)
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT created_at, name, status, message
+            FROM action_history
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [
+        {
+            "created_at": row[0],
+            "name": row[1],
+            "status": row[2],
+            "message": row[3],
+        }
+        for row in rows
+    ]
 
 
 def _remember_action(item: dict[str, str]) -> None:
-    ACTION_HISTORY.insert(0, item)
-    del ACTION_HISTORY[ACTION_HISTORY_LIMIT:]
+    record_action_history(item["name"], item["status"], item["message"])
 
 
 def build_ingest_action_payload() -> dict[str, object]:
