@@ -268,11 +268,11 @@ Phase 5 review on 2026-06-02:
 
 Target: 1-2 weeks
 
-- Add a small API service around search and synthesis. In progress: local standard-library web service exposes status, wiki, search, and source endpoints.
-- Build a browser-first UI. In progress: `web` command serves a dense local dashboard with health, search, sources, wiki, graph, and workflow sections.
+- Add a small API service around search and synthesis. In progress: local standard-library web service exposes status, wiki, search, source, and ask endpoints.
+- Build a browser-first UI. In progress: `web` command serves a dense local dashboard with ask, search, sources, wiki, graph, and workflow sections.
 - Add private access guidance for Tailscale or equivalent.
 - Add authentication before any non-local exposure.
-- Add source viewer, chat history, wiki browser, and ingestion status. In progress: source viewer, wiki browser, and ingestion/status visibility are available; chat history remains.
+- Add source viewer, chat history, wiki browser, and ingestion status. In progress: source viewer, wiki browser, ingestion/status visibility, Ask, and lightweight chat history are available.
 - Keep the first UI dense and useful rather than marketing-like.
 
 Exit criteria:
@@ -288,6 +288,7 @@ Phase 6 progress on 2026-06-02:
 - Added `web` CLI command and `make web` target for the browser UI.
 - Added a dense product shell showing system readiness, vault/wiki counts, graph relationship count, wiki pages, and core workflow commands.
 - Added web search with cited chunks and a safe source viewer that blocks path traversal.
+- Added web Ask with cited answer sources, lightweight local chat history, and a sharper GitHub/shadcn-style visual system.
 
 ### Phase 7: Production Operations
 

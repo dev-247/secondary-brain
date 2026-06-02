@@ -9,7 +9,11 @@ from urllib.parse import parse_qs, urlparse
 from scripts.config import VAULT_DIR, WIKI_DIR
 from scripts.graph import list_relationships
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
+from scripts.router import ABSTENTION_MESSAGE, synthesize_answer_result
 from scripts.search import diagnostic_rows, format_citation, hybrid_search
+
+CHAT_HISTORY_LIMIT = 20
+CHAT_HISTORY: list[dict[str, str]] = []
 
 
 def _markdown_files(root: Path) -> list[Path]:
@@ -116,6 +120,74 @@ def build_search_payload(query: str, *, limit: int = 5) -> dict[str, object]:
     }
 
 
+def clear_chat_history() -> None:
+    CHAT_HISTORY.clear()
+
+
+def get_chat_history() -> list[dict[str, str]]:
+    return list(CHAT_HISTORY)
+
+
+def _remember_chat_item(item: dict[str, str]) -> None:
+    CHAT_HISTORY.insert(0, item)
+    del CHAT_HISTORY[CHAT_HISTORY_LIMIT:]
+
+
+def build_answer_payload(query: str, *, limit: int = 5) -> dict[str, object]:
+    query = query.strip()
+    if not query:
+        return {"query": query, "answer": "", "sources": []}
+    if not check_qdrant_health():
+        return {
+            "query": query,
+            "answer": ABSTENTION_MESSAGE,
+            "mode": "none",
+            "confidence": "low",
+            "sources": [],
+            "error": "qdrant is not ready",
+        }
+
+    results = hybrid_search(query, limit=limit)
+    try:
+        answer_result = synthesize_answer_result(
+            query,
+            results,
+            mode="fast",
+        )
+        answer = answer_result.answer
+        mode = answer_result.mode
+        confidence = answer_result.confidence
+    except RuntimeError as exc:
+        answer = str(exc)
+        mode = "error"
+        confidence = "low"
+
+    sources = [
+        {
+            "path": result.path,
+            "heading": result.heading,
+            "chunk": result.chunk_index,
+            "citation": format_citation(result),
+        }
+        for result in results
+    ]
+    _remember_chat_item(
+        {
+            "question": query,
+            "answer": answer,
+            "mode": mode,
+            "confidence": confidence,
+        }
+    )
+    return {
+        "query": query,
+        "answer": answer,
+        "mode": mode,
+        "confidence": confidence,
+        "sources": sources,
+    }
+
+
 def _status_chip(ready: bool) -> str:
     label = "ready" if ready else "down"
     tone = "good" if ready else "bad"
@@ -128,9 +200,13 @@ def render_dashboard(
     wiki_pages: list[dict[str, str]],
     source_files: list[str] | None = None,
     search_payload: dict[str, object] | None = None,
+    answer_payload: dict[str, object] | None = None,
+    chat_history: list[dict[str, str]] | None = None,
 ) -> str:
     source_files = source_files or []
     search_payload = search_payload or {"query": "", "results": []}
+    answer_payload = answer_payload or {"query": "", "answer": "", "sources": []}
+    chat_history = chat_history or []
     wiki_rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(page['title'])}</td>"
@@ -151,6 +227,17 @@ def render_dashboard(
         "</tr>"
         for item in search_payload.get("results", [])
     ) or '<tr><td colspan="3" class="muted">Run a search to inspect cited chunks.</td></tr>'
+    answer_sources = "\n".join(
+        f"<li>{html.escape(str(source['citation']))}</li>"
+        for source in answer_payload.get("sources", [])
+    ) or '<li class="muted">No answer sources yet.</li>'
+    history_rows = "\n".join(
+        "<tr>"
+        f"<td>{html.escape(item['question'])}<br><span class=\"muted\">{html.escape(item['mode'])} / {html.escape(item['confidence'])}</span></td>"
+        f"<td>{html.escape(item['answer'])}</td>"
+        "</tr>"
+        for item in chat_history[:8]
+    ) or '<tr><td colspan="2" class="muted">Ask a question to start chat history.</td></tr>'
 
     return f"""<!doctype html>
 <html lang="en">
@@ -161,22 +248,23 @@ def render_dashboard(
   <style>
     :root {{
       color-scheme: light;
-      --ink: #172026;
-      --muted: #66727d;
-      --line: #d8dee4;
+      --ink: #24292f;
+      --muted: #57606a;
+      --line: #d0d7de;
       --panel: #f6f8fa;
       --paper: #ffffff;
-      --accent: #0f766e;
-      --accent-2: #7c3aed;
+      --accent: #0969da;
+      --accent-2: #8250df;
       --warn: #b45309;
-      --bad: #b91c1c;
+      --bad: #cf222e;
+      --shadow: 0 1px 0 rgba(27, 31, 36, .04);
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
       font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--ink);
-      background: var(--paper);
+      background: #f6f8fa;
     }}
     .shell {{
       display: grid;
@@ -185,7 +273,7 @@ def render_dashboard(
     }}
     aside {{
       border-right: 1px solid var(--line);
-      background: var(--panel);
+      background: #ffffff;
       padding: 20px;
     }}
     main {{ padding: 24px; }}
@@ -205,6 +293,7 @@ def render_dashboard(
       border-radius: 8px;
       padding: 14px;
       background: var(--paper);
+      box-shadow: var(--shadow);
     }}
     .metric {{ font-size: 24px; font-weight: 700; }}
     .chip {{
@@ -235,7 +324,25 @@ def render_dashboard(
       padding: 6px 10px;
       font: inherit;
     }}
-    button {{ background: var(--ink); color: white; cursor: pointer; }}
+    button {{ background: #24292f; color: white; cursor: pointer; font-weight: 600; }}
+    button:hover {{ background: #32383f; }}
+    textarea {{
+      width: 100%;
+      min-height: 88px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+    }}
+    pre {{
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      background: #f6f8fa;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+    }}
     code {{ background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }}
     @media (max-width: 900px) {{
       .shell {{ grid-template-columns: 1fr; }}
@@ -251,7 +358,9 @@ def render_dashboard(
       <div class="muted">Local-first AI knowledge cockpit</div>
       <nav class="nav" aria-label="Sections">
         <a href="#ingestion">Ingestion</a>
+        <a href="#ask">Ask</a>
         <a href="#search">Search</a>
+        <a href="#sources">Sources</a>
         <a href="#wiki">Wiki</a>
         <a href="#graph">Graph</a>
       </nav>
@@ -264,6 +373,16 @@ def render_dashboard(
         <div class="panel"><h2>Graph</h2><div class="metric">{status['graph_relationships']}</div><div class="muted">relationships</div></div>
       </section>
       <section class="workbench">
+        <div class="panel" id="ask">
+          <h2>Ask</h2>
+          <form action="/ask" method="get" class="command-list">
+            <textarea name="q" placeholder="Ask a source-grounded question">{html.escape(str(answer_payload.get('query', '')))}</textarea>
+            <button type="submit">Ask local model</button>
+          </form>
+          <pre>{html.escape(str(answer_payload.get('answer', 'Ask a question to generate a cited answer.')))}</pre>
+          <h2>Sources</h2>
+          <ul>{answer_sources}</ul>
+        </div>
         <div class="panel" id="search">
           <h2>Search</h2>
           <form action="/search" method="get" class="search-form">
@@ -287,6 +406,13 @@ def render_dashboard(
           <table>
             <thead><tr><th>Path</th></tr></thead>
             <tbody>{source_rows}</tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <h2>Chat history</h2>
+          <table>
+            <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+            <tbody>{history_rows}</tbody>
           </table>
         </div>
         <div class="panel">
@@ -358,6 +484,12 @@ class SecondBrainWebHandler(BaseHTTPRequestHandler):
             limit = int(params.get("limit", ["5"])[0])
             self._send_json(build_search_payload(query, limit=limit))
             return
+        if parsed.path == "/api/ask":
+            params = parse_qs(parsed.query)
+            query = params.get("q", [""])[0]
+            limit = int(params.get("limit", ["5"])[0])
+            self._send_json(build_answer_payload(query, limit=limit))
+            return
         if parsed.path == "/api/source":
             params = parse_qs(parsed.query)
             source_path = params.get("path", [""])[0]
@@ -375,6 +507,21 @@ class SecondBrainWebHandler(BaseHTTPRequestHandler):
                     wiki_pages=list_wiki_pages(),
                     source_files=list_source_files(),
                     search_payload=build_search_payload(query),
+                    chat_history=get_chat_history(),
+                )
+            )
+            return
+        if parsed.path == "/ask":
+            params = parse_qs(parsed.query)
+            query = params.get("q", [""])[0]
+            answer_payload = build_answer_payload(query)
+            self._send_html(
+                render_dashboard(
+                    status=build_status_payload(),
+                    wiki_pages=list_wiki_pages(),
+                    source_files=list_source_files(),
+                    answer_payload=answer_payload,
+                    chat_history=get_chat_history(),
                 )
             )
             return
@@ -401,6 +548,7 @@ class SecondBrainWebHandler(BaseHTTPRequestHandler):
                     status=build_status_payload(),
                     wiki_pages=list_wiki_pages(),
                     source_files=list_source_files(),
+                    chat_history=get_chat_history(),
                 )
             )
             return

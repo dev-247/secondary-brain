@@ -7,8 +7,11 @@ from unittest.mock import patch
 
 from scripts.search import SearchResult
 from scripts.web import (
+    build_answer_payload,
     build_search_payload,
     build_status_payload,
+    clear_chat_history,
+    get_chat_history,
     list_source_files,
     list_wiki_pages,
     read_source_file,
@@ -73,6 +76,8 @@ class WebTests(unittest.TestCase):
         )
 
         self.assertIn("Second Brain", html)
+        self.assertIn("Ask", html)
+        self.assertIn("Chat history", html)
         self.assertIn("Ingestion", html)
         self.assertIn("Search", html)
         self.assertIn("Sources", html)
@@ -113,6 +118,33 @@ class WebTests(unittest.TestCase):
 
         self.assertEqual(files, ["alpha.md"])
         self.assertEqual(source["content"], "# Alpha\n")
+
+    def test_build_answer_payload_returns_answer_sources_and_history(self) -> None:
+        clear_chat_history()
+        result = SearchResult(
+            content="Project Alpha keeps notes local.",
+            filename="alpha.md",
+            path="alpha.md",
+            heading="Overview",
+            chunk_index=0,
+            score=0.8,
+        )
+
+        with (
+            patch("scripts.web.check_qdrant_health", return_value=True),
+            patch("scripts.web.hybrid_search", return_value=[result]),
+            patch("scripts.web.synthesize_answer_result") as synthesize,
+        ):
+            synthesize.return_value.answer = "Project Alpha keeps notes local [1]."
+            synthesize.return_value.mode = "fast"
+            synthesize.return_value.confidence = "high"
+            payload = build_answer_payload("What is Project Alpha?", limit=3)
+
+        self.assertEqual(payload["answer"], "Project Alpha keeps notes local [1].")
+        self.assertEqual(payload["mode"], "fast")
+        self.assertEqual(payload["confidence"], "high")
+        self.assertEqual(payload["sources"][0]["path"], "alpha.md")
+        self.assertEqual(get_chat_history()[0]["question"], "What is Project Alpha?")
 
 
 if __name__ == "__main__":
