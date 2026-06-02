@@ -5,7 +5,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.web import build_status_payload, list_wiki_pages, render_dashboard
+from scripts.search import SearchResult
+from scripts.web import (
+    build_search_payload,
+    build_status_payload,
+    list_source_files,
+    list_wiki_pages,
+    read_source_file,
+    render_dashboard,
+)
 
 
 class WebTests(unittest.TestCase):
@@ -61,14 +69,50 @@ class WebTests(unittest.TestCase):
                     "review_status": "reviewed",
                 }
             ],
+            source_files=["alpha.md"],
         )
 
         self.assertIn("Second Brain", html)
         self.assertIn("Ingestion", html)
         self.assertIn("Search", html)
+        self.assertIn("Sources", html)
         self.assertIn("Wiki", html)
         self.assertIn("Graph", html)
         self.assertIn("Project Alpha", html)
+
+    def test_build_search_payload_returns_citations(self) -> None:
+        result = SearchResult(
+            content="Project Alpha keeps notes local.",
+            filename="alpha.md",
+            path="alpha.md",
+            heading="Overview",
+            chunk_index=0,
+            score=0.8,
+        )
+        with (
+            patch("scripts.web.check_qdrant_health", return_value=True),
+            patch("scripts.web.hybrid_search", return_value=[result]),
+        ):
+            payload = build_search_payload("Project Alpha", limit=3)
+
+        self.assertEqual(payload["query"], "Project Alpha")
+        self.assertEqual(payload["results"][0]["path"], "alpha.md")
+        self.assertIn("alpha.md", payload["results"][0]["citation"])
+
+    def test_list_and_read_source_files_stays_inside_vault(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            vault = Path(directory)
+            (vault / "alpha.md").write_text("# Alpha\n", encoding="utf-8")
+            (vault / "ignore.bin").write_text("binary-ish", encoding="utf-8")
+
+            files = list_source_files(vault_root=vault)
+            source = read_source_file("alpha.md", vault_root=vault)
+
+            with self.assertRaises(ValueError):
+                read_source_file("../secret.md", vault_root=vault)
+
+        self.assertEqual(files, ["alpha.md"])
+        self.assertEqual(source["content"], "# Alpha\n")
 
 
 if __name__ == "__main__":

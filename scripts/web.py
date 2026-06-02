@@ -9,12 +9,23 @@ from urllib.parse import parse_qs, urlparse
 from scripts.config import VAULT_DIR, WIKI_DIR
 from scripts.graph import list_relationships
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
+from scripts.search import diagnostic_rows, format_citation, hybrid_search
 
 
 def _markdown_files(root: Path) -> list[Path]:
     if not root.exists():
         return []
     return sorted(path for path in root.rglob("*.md") if path.is_file())
+
+
+def _supported_source_files(root: Path) -> list[Path]:
+    if not root.exists():
+        return []
+    return sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower() in {".md", ".markdown", ".txt"}
+    )
 
 
 def _frontmatter_value(text: str, key: str, default: str = "") -> str:
@@ -63,6 +74,48 @@ def list_wiki_pages(*, wiki_root: Path = WIKI_DIR) -> list[dict[str, str]]:
     return pages
 
 
+def list_source_files(*, vault_root: Path = VAULT_DIR) -> list[str]:
+    return [path.relative_to(vault_root).as_posix() for path in _supported_source_files(vault_root)]
+
+
+def read_source_file(path: str, *, vault_root: Path = VAULT_DIR) -> dict[str, str]:
+    target = (vault_root / path).resolve()
+    root = vault_root.resolve()
+    if root not in target.parents and target != root:
+        raise ValueError("source path must stay inside the vault")
+    if not target.exists() or not target.is_file():
+        raise FileNotFoundError(path)
+    return {
+        "path": target.relative_to(root).as_posix(),
+        "content": target.read_text(encoding="utf-8", errors="replace"),
+    }
+
+
+def build_search_payload(query: str, *, limit: int = 5) -> dict[str, object]:
+    query = query.strip()
+    if not query:
+        return {"query": query, "results": []}
+    if not check_qdrant_health():
+        return {"query": query, "results": [], "error": "qdrant is not ready"}
+
+    results = hybrid_search(query, limit=limit)
+    rows = diagnostic_rows(results, preview_chars=180)
+    return {
+        "query": query,
+        "results": [
+            {
+                "path": row["path"],
+                "heading": row["heading"],
+                "chunk": row["chunk"],
+                "score": row["score"],
+                "citation": format_citation(result),
+                "preview": row["preview"],
+            }
+            for row, result in zip(rows, results, strict=False)
+        ],
+    }
+
+
 def _status_chip(ready: bool) -> str:
     label = "ready" if ready else "down"
     tone = "good" if ready else "bad"
@@ -73,7 +126,11 @@ def render_dashboard(
     *,
     status: dict[str, object],
     wiki_pages: list[dict[str, str]],
+    source_files: list[str] | None = None,
+    search_payload: dict[str, object] | None = None,
 ) -> str:
+    source_files = source_files or []
+    search_payload = search_payload or {"query": "", "results": []}
     wiki_rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(page['title'])}</td>"
@@ -82,6 +139,18 @@ def render_dashboard(
         "</tr>"
         for page in wiki_pages
     ) or '<tr><td colspan="3" class="muted">No wiki pages yet.</td></tr>'
+    source_rows = "\n".join(
+        f'<tr><td><a href="/source?path={html.escape(path)}">{html.escape(path)}</a></td></tr>'
+        for path in source_files
+    ) or '<tr><td class="muted">No supported source files yet.</td></tr>'
+    search_rows = "\n".join(
+        "<tr>"
+        f"<td>{html.escape(str(item['score']))}</td>"
+        f"<td>{html.escape(str(item['path']))}</td>"
+        f"<td>{html.escape(str(item['citation']))}<br><span class=\"muted\">{html.escape(str(item['preview']))}</span></td>"
+        "</tr>"
+        for item in search_payload.get("results", [])
+    ) or '<tr><td colspan="3" class="muted">Run a search to inspect cited chunks.</td></tr>'
 
     return f"""<!doctype html>
 <html lang="en">
@@ -158,6 +227,15 @@ def render_dashboard(
     th, td {{ border-bottom: 1px solid var(--line); padding: 9px 6px; text-align: left; vertical-align: top; }}
     th {{ font-size: 12px; color: var(--muted); font-weight: 700; text-transform: uppercase; }}
     .command-list {{ display: grid; gap: 10px; }}
+    .search-form {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-bottom: 12px; }}
+    input, button {{
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font: inherit;
+    }}
+    button {{ background: var(--ink); color: white; cursor: pointer; }}
     code {{ background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }}
     @media (max-width: 900px) {{
       .shell {{ grid-template-columns: 1fr; }}
@@ -186,6 +264,17 @@ def render_dashboard(
         <div class="panel"><h2>Graph</h2><div class="metric">{status['graph_relationships']}</div><div class="muted">relationships</div></div>
       </section>
       <section class="workbench">
+        <div class="panel" id="search">
+          <h2>Search</h2>
+          <form action="/search" method="get" class="search-form">
+            <input name="q" value="{html.escape(str(search_payload.get('query', '')))}" placeholder="Search your indexed knowledge">
+            <button type="submit">Search</button>
+          </form>
+          <table>
+            <thead><tr><th>Score</th><th>Path</th><th>Citation and Preview</th></tr></thead>
+            <tbody>{search_rows}</tbody>
+          </table>
+        </div>
         <div class="panel" id="wiki">
           <h2>Wiki</h2>
           <table>
@@ -193,11 +282,18 @@ def render_dashboard(
             <tbody>{wiki_rows}</tbody>
           </table>
         </div>
+        <div class="panel" id="sources">
+          <h2>Sources</h2>
+          <table>
+            <thead><tr><th>Path</th></tr></thead>
+            <tbody>{source_rows}</tbody>
+          </table>
+        </div>
         <div class="panel">
           <h2>Workflow</h2>
           <div class="command-list">
             <div id="ingestion"><strong>Ingestion</strong><br><code>uv run python main.py ingest</code></div>
-            <div id="search"><strong>Search</strong><br><code>uv run python main.py search "query"</code></div>
+            <div><strong>Search</strong><br><code>uv run python main.py search "query"</code></div>
             <div><strong>Ask</strong><br><code>uv run python main.py ask "question"</code></div>
             <div id="graph"><strong>Graph</strong><br><code>uv run python main.py graph-build</code></div>
           </div>
@@ -208,6 +304,27 @@ def render_dashboard(
 </body>
 </html>
 """
+
+
+def render_source_page(
+    *,
+    status: dict[str, object],
+    wiki_pages: list[dict[str, str]],
+    source_files: list[str],
+    source: dict[str, str],
+) -> str:
+    dashboard = render_dashboard(
+        status=status,
+        wiki_pages=wiki_pages,
+        source_files=source_files,
+    )
+    source_panel = (
+        '<div class="panel">'
+        f"<h2>Source: {html.escape(source['path'])}</h2>"
+        f"<pre>{html.escape(source['content'])}</pre>"
+        "</div>"
+    )
+    return dashboard.replace("</main>", f"{source_panel}</main>")
 
 
 class SecondBrainWebHandler(BaseHTTPRequestHandler):
@@ -235,11 +352,55 @@ class SecondBrainWebHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/wiki":
             self._send_json({"pages": list_wiki_pages()})
             return
+        if parsed.path == "/api/search":
+            params = parse_qs(parsed.query)
+            query = params.get("q", [""])[0]
+            limit = int(params.get("limit", ["5"])[0])
+            self._send_json(build_search_payload(query, limit=limit))
+            return
+        if parsed.path == "/api/source":
+            params = parse_qs(parsed.query)
+            source_path = params.get("path", [""])[0]
+            try:
+                self._send_json(read_source_file(source_path))
+            except (FileNotFoundError, ValueError) as exc:
+                self._send_json({"error": str(exc)}, status=404)
+            return
+        if parsed.path == "/search":
+            params = parse_qs(parsed.query)
+            query = params.get("q", [""])[0]
+            self._send_html(
+                render_dashboard(
+                    status=build_status_payload(),
+                    wiki_pages=list_wiki_pages(),
+                    source_files=list_source_files(),
+                    search_payload=build_search_payload(query),
+                )
+            )
+            return
+        if parsed.path == "/source":
+            params = parse_qs(parsed.query)
+            source_path = params.get("path", [""])[0]
+            try:
+                source = read_source_file(source_path)
+            except (FileNotFoundError, ValueError) as exc:
+                self._send_json({"error": str(exc)}, status=404)
+                return
+            self._send_html(
+                render_source_page(
+                    status=build_status_payload(),
+                    wiki_pages=list_wiki_pages(),
+                    source_files=list_source_files(),
+                    source=source,
+                )
+            )
+            return
         if parsed.path == "/":
             self._send_html(
                 render_dashboard(
                     status=build_status_payload(),
                     wiki_pages=list_wiki_pages(),
+                    source_files=list_source_files(),
                 )
             )
             return
