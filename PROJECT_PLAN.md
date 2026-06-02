@@ -268,8 +268,8 @@ Phase 5 review on 2026-06-02:
 
 Target: 1-2 weeks
 
-- Add a small API service around search and synthesis.
-- Build a browser-first UI.
+- Add a small API service around search and synthesis. In progress: local standard-library web service exposes `/api/status` and `/api/wiki`.
+- Build a browser-first UI. In progress: `web` command serves a dense local dashboard with health, vault, wiki, graph, and workflow sections.
 - Add private access guidance for Tailscale or equivalent.
 - Add authentication before any non-local exposure.
 - Add source viewer, chat history, wiki browser, and ingestion status.
@@ -280,6 +280,13 @@ Exit criteria:
 - A user can ingest, search, ask, inspect citations, and browse wiki pages from a web UI.
 - Remote access is private by default.
 - No service is exposed publicly without authentication.
+
+Phase 6 progress on 2026-06-02:
+
+- `make smoke` passes with 54 tests.
+- Added `scripts/web.py` with a local HTTP service and JSON status/wiki endpoints.
+- Added `web` CLI command and `make web` target for the browser UI.
+- Added a dense product shell showing system readiness, vault/wiki counts, graph relationship count, wiki pages, and core workflow commands.
 
 ### Phase 7: Production Operations
 

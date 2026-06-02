@@ -22,6 +22,7 @@ from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
 from scripts.router import ABSTENTION_MESSAGE, synthesize_answer, synthesize_answer_result
 from scripts.search import diagnostic_rows, format_citation, hybrid_search
+from scripts.web import run_web_server
 from scripts.wiki import promote_wiki_draft, write_wiki_draft
 
 console = Console()
@@ -221,6 +222,11 @@ def cmd_graph_timeline(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_web(args: argparse.Namespace) -> int:
+    run_web_server(host=args.host, port=args.port)
+    return 0
+
+
 def cmd_wiki_generate(args: argparse.Namespace) -> int:
     if not check_qdrant_health():
         console.print("[red]Qdrant is not running. Start it with: docker compose up -d[/red]")
@@ -333,6 +339,11 @@ def build_parser() -> argparse.ArgumentParser:
     timeline_parser.add_argument("entity", help="Entity name, such as 'Project Alpha'")
     timeline_parser.add_argument("--limit", type=int, default=10, help="Maximum timeline events to show")
     timeline_parser.set_defaults(func=cmd_graph_timeline)
+
+    web_parser = subparsers.add_parser("web", help="Run the local browser UI")
+    web_parser.add_argument("--host", default="127.0.0.1", help="Host to bind")
+    web_parser.add_argument("--port", type=int, default=8765, help="Port to bind")
+    web_parser.set_defaults(func=cmd_web)
 
     wiki_parser = subparsers.add_parser("wiki-generate", help="Generate a cited draft wiki page")
     wiki_parser.add_argument("topic", help="Topic to generate")
