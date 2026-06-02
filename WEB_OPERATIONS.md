@@ -51,6 +51,39 @@ What it does:
 - Stores entities, relationships, dependencies, and dated events in the local graph database.
 - Preserves source path, chunk index, and evidence text.
 
+### Generate wiki draft
+
+UI field: `Topic`
+
+API:
+
+```bash
+curl -X POST -d "topic=Project Alpha" http://127.0.0.1:8765/api/wiki-generate
+```
+
+What it does:
+
+- Searches indexed sources for the topic.
+- Creates a cited draft under `wiki/drafts/`.
+- Keeps the page marked as `review_status: draft`.
+
+### Promote reviewed draft
+
+UI fields: `Draft slug`, `Reviewer name`
+
+API:
+
+```bash
+curl -X POST -d "draft=project-alpha&reviewer=Vasu" http://127.0.0.1:8765/api/wiki-promote
+```
+
+What it does:
+
+- Moves a reviewed draft from `wiki/drafts/` into `wiki/`.
+- Marks the page as reviewed.
+- Records the reviewer.
+- Refuses accidental overwrites by default.
+
 ## AI-native operating loop
 
 1. Add or edit source files in `vault/`.
@@ -58,7 +91,9 @@ What it does:
 3. Run `Build graph`.
 4. Use Search to inspect retrieved chunks.
 5. Use Ask for source-grounded answers.
-6. Use Sources, Wiki, and Graph views to verify provenance.
+6. Generate wiki drafts for stable topics.
+7. Review and promote drafts when they are trustworthy.
+8. Use Sources, Wiki, and Graph views to verify provenance.
 
 ## Safety
 

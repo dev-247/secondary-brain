@@ -13,6 +13,7 @@ from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
 from scripts.router import ABSTENTION_MESSAGE, synthesize_answer_result
 from scripts.search import diagnostic_rows, format_citation, hybrid_search
+from scripts.wiki import promote_wiki_draft, write_wiki_draft
 
 CHAT_HISTORY_LIMIT = 20
 CHAT_HISTORY: list[dict[str, str]] = []
@@ -256,6 +257,46 @@ def build_graph_action_payload(*, limit: int = 500) -> dict[str, object]:
     return payload
 
 
+def build_wiki_generate_action_payload(topic: str, *, limit: int = 5) -> dict[str, object]:
+    topic = topic.strip()
+    if not topic:
+        return {"status": "error", "message": "Topic is required.", "path": ""}
+    if not check_qdrant_health():
+        return {"status": "error", "message": "Qdrant is not ready.", "path": ""}
+
+    results = hybrid_search(topic, limit=limit)
+    if not results:
+        return {"status": "error", "message": "No sources found for wiki draft.", "path": ""}
+    path = write_wiki_draft(topic, results)
+    message = f"Generated draft wiki page for {topic}."
+    payload = {"status": "ok", "message": message, "path": str(path)}
+    _remember_action({"name": "wiki-generate", "status": "ok", "message": message})
+    return payload
+
+
+def build_wiki_promote_action_payload(
+    draft: str,
+    *,
+    reviewer: str = "human",
+    overwrite: bool = False,
+) -> dict[str, object]:
+    draft = draft.strip()
+    reviewer = reviewer.strip() or "human"
+    if not draft:
+        return {"status": "error", "message": "Draft slug is required.", "path": ""}
+    try:
+        path = promote_wiki_draft(draft, reviewer=reviewer, overwrite=overwrite)
+    except (FileNotFoundError, FileExistsError) as exc:
+        payload: dict[str, object] = {"status": "error", "message": str(exc), "path": ""}
+        _remember_action({"name": "wiki-promote", "status": "error", "message": str(exc)})
+        return payload
+
+    message = f"Promoted {draft} to reviewed wiki page."
+    payload = {"status": "ok", "message": message, "path": str(path)}
+    _remember_action({"name": "wiki-promote", "status": "ok", "message": message})
+    return payload
+
+
 def _status_chip(ready: bool) -> str:
     label = "ready" if ready else "down"
     tone = "good" if ready else "bad"
@@ -471,6 +512,19 @@ def render_dashboard(
               <p class="muted">Extract source-backed entities, relationships, dependencies, and dated events.</p>
               <button type="submit">Build graph</button>
             </form>
+            <form action="/action/wiki-generate" method="post" class="action-card">
+              <strong>Generate wiki draft</strong>
+              <p class="muted">Create a cited draft from retrieved sources. Review before promoting.</p>
+              <input name="topic" placeholder="Topic, e.g. Project Alpha">
+              <button type="submit">Generate draft</button>
+            </form>
+            <form action="/action/wiki-promote" method="post" class="action-card">
+              <strong>Promote reviewed draft</strong>
+              <p class="muted">Move a reviewed draft into the main wiki without silent overwrite.</p>
+              <input name="draft" placeholder="Draft slug, e.g. project-alpha">
+              <input name="reviewer" placeholder="Reviewer name">
+              <button type="submit">Promote draft</button>
+            </form>
           </div>
           <h2>Activity</h2>
           <table>
@@ -584,6 +638,11 @@ class SecondBrainWebHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
+    def _read_form(self) -> dict[str, str]:
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length).decode("utf-8") if length else ""
+        return {key: values[0] for key, values in parse_qs(body).items()}
+
     def do_GET(self) -> None:
         if not self._authorized():
             self._send_json({"error": "unauthorized"}, status=401)
@@ -685,6 +744,20 @@ class SecondBrainWebHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/graph-build":
             self._send_json(build_graph_action_payload())
             return
+        if parsed.path == "/api/wiki-generate":
+            form = self._read_form()
+            self._send_json(build_wiki_generate_action_payload(form.get("topic", "")))
+            return
+        if parsed.path == "/api/wiki-promote":
+            form = self._read_form()
+            self._send_json(
+                build_wiki_promote_action_payload(
+                    form.get("draft", ""),
+                    reviewer=form.get("reviewer", "human"),
+                    overwrite=form.get("overwrite", "") == "true",
+                )
+            )
+            return
         if parsed.path == "/action/ingest":
             build_ingest_action_payload()
             self._send_html(
@@ -699,6 +772,35 @@ class SecondBrainWebHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/action/graph-build":
             build_graph_action_payload()
+            self._send_html(
+                render_dashboard(
+                    status=build_status_payload(),
+                    wiki_pages=list_wiki_pages(),
+                    source_files=list_source_files(),
+                    chat_history=get_chat_history(),
+                    action_history=get_action_history(),
+                )
+            )
+            return
+        if parsed.path == "/action/wiki-generate":
+            form = self._read_form()
+            build_wiki_generate_action_payload(form.get("topic", ""))
+            self._send_html(
+                render_dashboard(
+                    status=build_status_payload(),
+                    wiki_pages=list_wiki_pages(),
+                    source_files=list_source_files(),
+                    chat_history=get_chat_history(),
+                    action_history=get_action_history(),
+                )
+            )
+            return
+        if parsed.path == "/action/wiki-promote":
+            form = self._read_form()
+            build_wiki_promote_action_payload(
+                form.get("draft", ""),
+                reviewer=form.get("reviewer", "human"),
+            )
             self._send_html(
                 render_dashboard(
                     status=build_status_payload(),

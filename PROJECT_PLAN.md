@@ -291,6 +291,7 @@ Phase 6 progress on 2026-06-02:
 - Added web Ask with cited answer sources, lightweight local chat history, and a sharper GitHub/shadcn-style visual system.
 - Added private access guardrails: localhost by default, token required for non-local binds, and private access guidance.
 - Added web operations for vault ingestion and graph building, with activity feedback and an AI-native operations guide.
+- Added web wiki operations for cited draft generation and reviewed draft promotion.
 
 ### Phase 7: Production Operations
 

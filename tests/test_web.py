@@ -12,6 +12,8 @@ from scripts.web import (
     build_ingest_action_payload,
     build_search_payload,
     build_status_payload,
+    build_wiki_generate_action_payload,
+    build_wiki_promote_action_payload,
     clear_chat_history,
     get_chat_history,
     list_source_files,
@@ -183,6 +185,36 @@ class WebTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["stats"]["relationships"], 1)
         self.assertEqual(payload["message"], "Built graph from 1 chunks with 1 relationships.")
+
+    def test_build_wiki_generate_action_payload_writes_draft(self) -> None:
+        result = SearchResult(
+            content="Project Alpha keeps notes local.",
+            filename="alpha.md",
+            path="alpha.md",
+            heading="Overview",
+            chunk_index=0,
+            score=0.8,
+        )
+        with (
+            patch("scripts.web.check_qdrant_health", return_value=True),
+            patch("scripts.web.hybrid_search", return_value=[result]),
+            patch("scripts.web.write_wiki_draft") as write_draft,
+        ):
+            write_draft.return_value = Path("/tmp/wiki/drafts/project-alpha.md")
+            payload = build_wiki_generate_action_payload("Project Alpha", limit=3)
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["path"], "/tmp/wiki/drafts/project-alpha.md")
+        self.assertEqual(payload["message"], "Generated draft wiki page for Project Alpha.")
+
+    def test_build_wiki_promote_action_payload_promotes_draft(self) -> None:
+        with patch("scripts.web.promote_wiki_draft") as promote:
+            promote.return_value = Path("/tmp/wiki/project-alpha.md")
+            payload = build_wiki_promote_action_payload("project-alpha", reviewer="Vasu")
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["path"], "/tmp/wiki/project-alpha.md")
+        self.assertEqual(payload["message"], "Promoted project-alpha to reviewed wiki page.")
 
 
 if __name__ == "__main__":
