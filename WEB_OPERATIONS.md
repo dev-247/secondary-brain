@@ -23,7 +23,7 @@ The top of the web UI summarizes the operational state of the local second brain
 It shows:
 
 - Readiness score and state.
-- Next best actions.
+- Next best actions with links to the relevant Ask, Wiki, Sources, or Operations section.
 - Production warnings.
 - Wiki drafts waiting for review.
 - Local memory map for vault, wiki, Qdrant, metadata, graph, and activity data.

@@ -105,6 +105,7 @@ def build_command_center_payload(
 
     warnings: list[str] = []
     next_actions: list[str] = []
+    action_items: list[dict[str, str]] = []
     score = 100
 
     qdrant_ready = bool(status.get("qdrant_ready"))
@@ -117,29 +118,41 @@ def build_command_center_payload(
     ]
 
     if not qdrant_ready:
+        action = "Start or repair Qdrant before asking knowledge questions."
         warnings.append("Qdrant is not ready, so search and Ask are unavailable.")
-        next_actions.append("Start or repair Qdrant before asking knowledge questions.")
+        next_actions.append(action)
+        action_items.append({"label": action, "href": "#command-center"})
         score -= 45
     if vault_files == 0:
+        action = "Add source notes to the vault, then run ingest."
         warnings.append("No source files are available in the vault.")
-        next_actions.append("Add source notes to the vault, then run ingest.")
+        next_actions.append(action)
+        action_items.append({"label": action, "href": "#sources"})
         score -= 25
     if graph_relationships == 0:
+        action = "Build graph memory after ingestion."
         warnings.append("Graph memory has no relationships yet.")
-        next_actions.append("Build graph memory after ingestion.")
+        next_actions.append(action)
+        action_items.append({"label": action, "href": "#operations"})
         score -= 15
     if review_queue:
         draft_count = len(review_queue)
+        action = f"Review {draft_count} wiki draft{'s' if draft_count != 1 else ''}."
         warnings.append(f"{draft_count} wiki draft{'s' if draft_count != 1 else ''} need review.")
-        next_actions.append(f"Review {draft_count} wiki draft{'s' if draft_count != 1 else ''}.")
+        next_actions.append(action)
+        action_items.append({"label": action, "href": "#wiki"})
         score -= 10
     if not chat_history and not action_history:
+        action = "Run Ask, Search, or an operation to begin an activity trail."
         warnings.append("No recent web activity has been recorded.")
-        next_actions.append("Run Ask, Search, or an operation to begin an activity trail.")
+        next_actions.append(action)
+        action_items.append({"label": action, "href": "#ask"})
         score -= 5
 
     if not next_actions:
-        next_actions.append("System looks ready. Ask a question or generate a cited wiki draft.")
+        action = "System looks ready. Ask a question or generate a cited wiki draft."
+        next_actions.append(action)
+        action_items.append({"label": action, "href": "#ask"})
 
     score = max(0, min(100, score))
     if not qdrant_ready or vault_files == 0 or score < 60:
@@ -153,6 +166,7 @@ def build_command_center_payload(
         "readiness": readiness,
         "score": score,
         "next_actions": next_actions,
+        "action_items": action_items,
         "warnings": warnings,
         "review_queue": review_queue,
         "recent_activity": {
@@ -595,8 +609,10 @@ def render_dashboard(
         for item in action_history[:8]
     ) or '<tr><td colspan="2" class="muted">Run an operation to see activity here.</td></tr>'
     next_action_rows = "\n".join(
-        f"<li>{html.escape(str(action))}</li>"
-        for action in command_center.get("next_actions", [])
+        "<li>"
+        f"<a class=\"action-link\" href=\"{html.escape(str(action['href']))}\">{html.escape(str(action['label']))}</a>"
+        "</li>"
+        for action in command_center.get("action_items", [])
     ) or '<li class="muted">No next actions.</li>'
     warning_rows = "\n".join(
         f"<li>{html.escape(str(warning))}</li>"

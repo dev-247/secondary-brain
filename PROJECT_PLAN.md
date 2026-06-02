@@ -294,6 +294,7 @@ Phase 6 progress on 2026-06-02:
 - Added web wiki operations for cited draft generation and reviewed draft promotion.
 - Added durable SQLite-backed web activity history so recent Ask and operation events survive server restarts.
 - Added Command Center v1 to surface readiness score, warnings, next actions, review queue, recent activity context, and local memory paths.
+- Added actionable Command Center recommendations that link users directly to the relevant Ask, Wiki, Sources, or Operations section.
 
 ### Phase 7: Production Operations
 

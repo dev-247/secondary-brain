@@ -89,6 +89,8 @@ class WebTests(unittest.TestCase):
         self.assertIn("Command Center", html)
         self.assertIn("Next actions", html)
         self.assertIn("Local memory map", html)
+        self.assertIn('class="action-link"', html)
+        self.assertIn('href="#ask"', html)
         self.assertIn("table-layout: fixed", html)
         self.assertIn("overflow-wrap: anywhere", html)
         self.assertIn("Ask", html)
@@ -135,6 +137,10 @@ class WebTests(unittest.TestCase):
 
         self.assertEqual(payload["readiness"], "warning")
         self.assertIn("Review 1 wiki draft.", payload["next_actions"])
+        self.assertIn(
+            {"label": "Review 1 wiki draft.", "href": "#wiki"},
+            payload["action_items"],
+        )
         self.assertEqual(payload["review_queue"][0]["path"], "drafts/project-alpha.md")
 
     def test_build_command_center_payload_needs_attention_when_core_is_down(self) -> None:
@@ -154,6 +160,10 @@ class WebTests(unittest.TestCase):
         self.assertEqual(payload["readiness"], "needs_attention")
         self.assertLess(payload["score"], 60)
         self.assertIn("Start or repair Qdrant before asking knowledge questions.", payload["next_actions"])
+        self.assertIn(
+            {"label": "Build graph memory after ingestion.", "href": "#operations"},
+            payload["action_items"],
+        )
 
     def test_build_search_payload_returns_citations(self) -> None:
         result = SearchResult(
