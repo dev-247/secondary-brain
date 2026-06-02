@@ -269,7 +269,7 @@ Phase 5 review on 2026-06-02:
 Target: 1-2 weeks
 
 - Add a small API service around search and synthesis. In progress: local standard-library web service exposes status, wiki, search, source, and ask endpoints.
-- Build a browser-first UI. In progress: `web` command serves a dense local dashboard with ask, search, sources, wiki, graph, and workflow sections.
+- Build a browser-first UI. In progress: `web` command serves a dense local dashboard with Command Center, ask, search, sources, wiki, graph, and workflow sections.
 - Add private access guidance for Tailscale or equivalent. Done for this phase: `PRIVATE_ACCESS.md` documents local-only defaults, Tailscale-style private access, and token usage.
 - Add authentication before any non-local exposure. Done for this phase: non-local web binds require `SECOND_BRAIN_WEB_TOKEN`, and token-protected requests are enforced when configured.
 - Add source viewer, chat history, wiki browser, and ingestion status. In progress: source viewer, wiki browser, ingestion/status visibility, Ask, and durable local chat/action history are available.
@@ -283,7 +283,7 @@ Exit criteria:
 
 Phase 6 progress on 2026-06-02:
 
-- `make smoke` passes with 64 tests.
+- `make smoke` passes with 66 tests.
 - Added `scripts/web.py` with a local HTTP service and JSON status/wiki endpoints.
 - Added `web` CLI command and `make web` target for the browser UI.
 - Added a dense product shell showing system readiness, vault/wiki counts, graph relationship count, wiki pages, and core workflow commands.
@@ -293,6 +293,7 @@ Phase 6 progress on 2026-06-02:
 - Added web operations for vault ingestion and graph building, with activity feedback and an AI-native operations guide.
 - Added web wiki operations for cited draft generation and reviewed draft promotion.
 - Added durable SQLite-backed web activity history so recent Ask and operation events survive server restarts.
+- Added Command Center v1 to surface readiness score, warnings, next actions, review queue, recent activity context, and local memory paths.
 
 ### Phase 7: Production Operations
 

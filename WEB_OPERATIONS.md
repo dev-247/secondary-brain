@@ -16,6 +16,20 @@ http://127.0.0.1:8765
 
 ## Available actions
 
+## Command Center
+
+The top of the web UI summarizes the operational state of the local second brain.
+
+It shows:
+
+- Readiness score and state.
+- Next best actions.
+- Production warnings.
+- Wiki drafts waiting for review.
+- Local memory map for vault, wiki, Qdrant, metadata, graph, and activity data.
+
+Use this first when deciding what to do next. It is designed to make the system feel inspectable before it feels magical.
+
 ### Ingest vault
 
 UI button: `Run ingest`

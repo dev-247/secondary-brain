@@ -9,7 +9,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from scripts.config import VAULT_DIR, WEB_ACTIVITY_DB_PATH, WIKI_DIR
+from scripts.config import (
+    GRAPH_DB_PATH,
+    METADATA_DB_PATH,
+    QDRANT_PATH,
+    VAULT_DIR,
+    WEB_ACTIVITY_DB_PATH,
+    WIKI_DIR,
+)
 from scripts.graph import extract_graph_from_chunks, indexed_chunks_from_qdrant, list_relationships
 from scripts.ingest import ingest_vault
 from scripts.qdrant_setup import check_qdrant_health, qdrant_status_label
@@ -81,6 +88,85 @@ def build_status_payload(
         "vault_files": len(_markdown_files(vault_root)),
         "wiki_pages": len(_markdown_files(wiki_root)),
         "graph_relationships": graph_relationships,
+    }
+
+
+def build_command_center_payload(
+    *,
+    status: dict[str, object] | None = None,
+    wiki_pages: list[dict[str, str]] | None = None,
+    chat_history: list[dict[str, str]] | None = None,
+    action_history: list[dict[str, str]] | None = None,
+) -> dict[str, object]:
+    status = status or build_status_payload()
+    wiki_pages = wiki_pages if wiki_pages is not None else list_wiki_pages()
+    chat_history = chat_history if chat_history is not None else get_chat_history(limit=5)
+    action_history = action_history if action_history is not None else get_action_history(limit=5)
+
+    warnings: list[str] = []
+    next_actions: list[str] = []
+    score = 100
+
+    qdrant_ready = bool(status.get("qdrant_ready"))
+    vault_files = int(status.get("vault_files", 0) or 0)
+    graph_relationships = int(status.get("graph_relationships", 0) or 0)
+    review_queue = [
+        page
+        for page in wiki_pages
+        if page.get("review_status") == "draft" or page.get("path", "").startswith("drafts/")
+    ]
+
+    if not qdrant_ready:
+        warnings.append("Qdrant is not ready, so search and Ask are unavailable.")
+        next_actions.append("Start or repair Qdrant before asking knowledge questions.")
+        score -= 45
+    if vault_files == 0:
+        warnings.append("No source files are available in the vault.")
+        next_actions.append("Add source notes to the vault, then run ingest.")
+        score -= 25
+    if graph_relationships == 0:
+        warnings.append("Graph memory has no relationships yet.")
+        next_actions.append("Build graph memory after ingestion.")
+        score -= 15
+    if review_queue:
+        draft_count = len(review_queue)
+        warnings.append(f"{draft_count} wiki draft{'s' if draft_count != 1 else ''} need review.")
+        next_actions.append(f"Review {draft_count} wiki draft{'s' if draft_count != 1 else ''}.")
+        score -= 10
+    if not chat_history and not action_history:
+        warnings.append("No recent web activity has been recorded.")
+        next_actions.append("Run Ask, Search, or an operation to begin an activity trail.")
+        score -= 5
+
+    if not next_actions:
+        next_actions.append("System looks ready. Ask a question or generate a cited wiki draft.")
+
+    score = max(0, min(100, score))
+    if not qdrant_ready or vault_files == 0 or score < 60:
+        readiness = "needs_attention"
+    elif warnings:
+        readiness = "warning"
+    else:
+        readiness = "healthy"
+
+    return {
+        "readiness": readiness,
+        "score": score,
+        "next_actions": next_actions,
+        "warnings": warnings,
+        "review_queue": review_queue,
+        "recent_activity": {
+            "chat": chat_history,
+            "actions": action_history,
+        },
+        "memory_map": [
+            {"label": "Vault", "path": str(VAULT_DIR)},
+            {"label": "Wiki", "path": str(WIKI_DIR)},
+            {"label": "Qdrant", "path": str(QDRANT_PATH)},
+            {"label": "Metadata DB", "path": str(METADATA_DB_PATH)},
+            {"label": "Graph DB", "path": str(GRAPH_DB_PATH)},
+            {"label": "Activity DB", "path": str(WEB_ACTIVITY_DB_PATH)},
+        ],
     }
 
 
@@ -457,12 +543,19 @@ def render_dashboard(
     answer_payload: dict[str, object] | None = None,
     chat_history: list[dict[str, str]] | None = None,
     action_history: list[dict[str, str]] | None = None,
+    command_center: dict[str, object] | None = None,
 ) -> str:
     source_files = source_files or []
     search_payload = search_payload or {"query": "", "results": []}
     answer_payload = answer_payload or {"query": "", "answer": "", "sources": []}
     chat_history = chat_history or []
     action_history = action_history or []
+    command_center = command_center or build_command_center_payload(
+        status=status,
+        wiki_pages=wiki_pages,
+        chat_history=chat_history,
+        action_history=action_history,
+    )
     wiki_rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(page['title'])}</td>"
@@ -501,6 +594,28 @@ def render_dashboard(
         "</tr>"
         for item in action_history[:8]
     ) or '<tr><td colspan="2" class="muted">Run an operation to see activity here.</td></tr>'
+    next_action_rows = "\n".join(
+        f"<li>{html.escape(str(action))}</li>"
+        for action in command_center.get("next_actions", [])
+    ) or '<li class="muted">No next actions.</li>'
+    warning_rows = "\n".join(
+        f"<li>{html.escape(str(warning))}</li>"
+        for warning in command_center.get("warnings", [])
+    ) or '<li class="muted">No warnings.</li>'
+    review_rows = "\n".join(
+        "<tr>"
+        f"<td>{html.escape(str(page['title']))}</td>"
+        f"<td>{html.escape(str(page['path']))}</td>"
+        "</tr>"
+        for page in command_center.get("review_queue", [])
+    ) or '<tr><td colspan="2" class="muted">No drafts waiting for review.</td></tr>'
+    memory_rows = "\n".join(
+        "<tr>"
+        f"<td>{html.escape(str(item['label']))}</td>"
+        f"<td><code>{html.escape(str(item['path']))}</code></td>"
+        "</tr>"
+        for item in command_center.get("memory_map", [])
+    )
 
     return f"""<!doctype html>
 <html lang="en">
@@ -642,6 +757,36 @@ def render_dashboard(
         <div class="panel"><h2>Vault</h2><div class="metric">{status['vault_files']}</div><div class="muted">markdown files</div></div>
         <div class="panel"><h2>Wiki</h2><div class="metric">{status['wiki_pages']}</div><div class="muted">pages</div></div>
         <div class="panel"><h2>Graph</h2><div class="metric">{status['graph_relationships']}</div><div class="muted">relationships</div></div>
+      </section>
+      <section class="panel" id="command-center">
+        <h2>Command Center</h2>
+        <div class="grid">
+          <div>
+            <div class="muted">Readiness</div>
+            <div class="metric">{html.escape(str(command_center.get('score', 0)))}</div>
+            <span class="chip">{html.escape(str(command_center.get('readiness', 'unknown')))}</span>
+          </div>
+          <div>
+            <h2>Next actions</h2>
+            <ul>{next_action_rows}</ul>
+          </div>
+          <div>
+            <h2>Warnings</h2>
+            <ul>{warning_rows}</ul>
+          </div>
+          <div>
+            <h2>Review queue</h2>
+            <table>
+              <thead><tr><th>Title</th><th>Path</th></tr></thead>
+              <tbody>{review_rows}</tbody>
+            </table>
+          </div>
+        </div>
+        <h2>Local memory map</h2>
+        <table>
+          <thead><tr><th>Store</th><th>Path</th></tr></thead>
+          <tbody>{memory_rows}</tbody>
+        </table>
       </section>
       <section class="workbench">
         <div class="panel" id="operations">

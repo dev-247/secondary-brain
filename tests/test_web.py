@@ -8,6 +8,7 @@ from unittest.mock import patch
 from scripts.search import SearchResult
 from scripts.web import (
     build_answer_payload,
+    build_command_center_payload,
     build_graph_action_payload,
     build_ingest_action_payload,
     build_search_payload,
@@ -85,6 +86,9 @@ class WebTests(unittest.TestCase):
         )
 
         self.assertIn("Second Brain", html)
+        self.assertIn("Command Center", html)
+        self.assertIn("Next actions", html)
+        self.assertIn("Local memory map", html)
         self.assertIn("Ask", html)
         self.assertIn("Chat history", html)
         self.assertIn("Ingestion", html)
@@ -93,6 +97,61 @@ class WebTests(unittest.TestCase):
         self.assertIn("Wiki", html)
         self.assertIn("Graph", html)
         self.assertIn("Project Alpha", html)
+
+    def test_build_command_center_payload_warns_for_review_queue(self) -> None:
+        payload = build_command_center_payload(
+            status={
+                "qdrant_ready": True,
+                "qdrant": "local",
+                "vault_files": 2,
+                "wiki_pages": 1,
+                "graph_relationships": 4,
+            },
+            wiki_pages=[
+                {
+                    "path": "drafts/project-alpha.md",
+                    "title": "Project Alpha",
+                    "review_status": "draft",
+                }
+            ],
+            chat_history=[
+                {
+                    "question": "What is alpha?",
+                    "answer": "Alpha is local.",
+                    "mode": "fast",
+                    "confidence": "high",
+                }
+            ],
+            action_history=[
+                {
+                    "name": "ingest",
+                    "status": "ok",
+                    "message": "Ingested 3 chunks.",
+                }
+            ],
+        )
+
+        self.assertEqual(payload["readiness"], "warning")
+        self.assertIn("Review 1 wiki draft.", payload["next_actions"])
+        self.assertEqual(payload["review_queue"][0]["path"], "drafts/project-alpha.md")
+
+    def test_build_command_center_payload_needs_attention_when_core_is_down(self) -> None:
+        payload = build_command_center_payload(
+            status={
+                "qdrant_ready": False,
+                "qdrant": "down",
+                "vault_files": 0,
+                "wiki_pages": 0,
+                "graph_relationships": 0,
+            },
+            wiki_pages=[],
+            chat_history=[],
+            action_history=[],
+        )
+
+        self.assertEqual(payload["readiness"], "needs_attention")
+        self.assertLess(payload["score"], 60)
+        self.assertIn("Start or repair Qdrant before asking knowledge questions.", payload["next_actions"])
 
     def test_build_search_payload_returns_citations(self) -> None:
         result = SearchResult(
