@@ -62,7 +62,7 @@ def _query_terms(query: str) -> set[str]:
     return {
         term
         for term in re.findall(r"[a-zA-Z0-9]+", query.lower())
-        if len(term) > 2
+        if len(term) > 1
     }
 
 
@@ -71,7 +71,10 @@ def assess_source_coverage(query: str, sources: list[SearchResult]) -> SourceCov
         return SourceCoverage(False, "low", 0.0, 0.0)
 
     terms = _query_terms(query)
-    combined = " ".join(source.content.lower() for source in sources)
+    combined = " ".join(
+        " ".join([source.content, source.filename, source.path, source.heading]).lower()
+        for source in sources
+    )
     lexical_coverage = 1.0 if not terms else sum(1 for term in terms if term in combined) / len(terms)
     best_score = max(source.score for source in sources)
     best_lexical_score = max((source.lexical_score for source in sources), default=0.0)
@@ -110,7 +113,13 @@ def _build_context(sources: list[SearchResult]) -> str:
     blocks: list[str] = []
     for index, source in enumerate(sources, start=1):
         citation = format_citation(source)
-        blocks.append(f"[{index}] Source: {citation}\n{source.content}")
+        title = source.heading or source.filename
+        blocks.append(
+            f"[{index}] Source: {citation}\n"
+            f"Title: {title}\n"
+            f"Path: {source.path}\n"
+            f"{source.content}"
+        )
     return "\n\n---\n\n".join(blocks)
 
 

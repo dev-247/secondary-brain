@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import PurePosixPath
+import re
 from typing import Protocol
 
 from qdrant_client import models
@@ -32,8 +34,12 @@ class Reranker(Protocol):
         ...
 
 
+def _query_terms(query: str) -> set[str]:
+    return {term for term in re.findall(r"[a-z0-9]+", query.lower()) if len(term) > 1}
+
+
 def _keyword_overlap_score(query: str, content: str) -> float:
-    query_terms = {term for term in query.lower().split() if len(term) > 2}
+    query_terms = _query_terms(query)
     if not query_terms:
         return 0.0
     content_lower = content.lower()
@@ -41,15 +47,36 @@ def _keyword_overlap_score(query: str, content: str) -> float:
     return hits / len(query_terms)
 
 
+def _is_definition_query(query: str) -> bool:
+    normalized = " ".join(_query_terms(query))
+    return (
+        query.lower().strip().startswith(("what is", "what's", "define ", "explain "))
+        or "what is" in query.lower()
+        or normalized.startswith("define")
+    )
+
+
+def _definition_intro_boost(query: str, result: SearchResult) -> float:
+    if not _is_definition_query(query) or result.chunk_index != 0:
+        return 0.0
+    terms = _query_terms(query)
+    stem = PurePosixPath(result.path).stem.lower()
+    filename_stem = PurePosixPath(result.filename).stem.lower()
+    if stem in terms or filename_stem in terms:
+        return 0.4
+    return 0.0
+
+
 class WeightedLexicalReranker:
     name = "weighted_lexical"
 
     def score(self, query: str, result: SearchResult) -> float:
         lexical_boost = _keyword_overlap_score(query, result.content)
+        definition_boost = _definition_intro_boost(query, result)
         result.lexical_score = lexical_boost
         if result.fused_score == 0.0:
             result.fused_score = result.score
-        return (result.fused_score * 0.85) + (lexical_boost * 0.15)
+        return (result.fused_score * 0.75) + (lexical_boost * 0.15) + definition_boost
 
 
 class LexicalOnlyReranker:

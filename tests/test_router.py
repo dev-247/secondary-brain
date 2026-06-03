@@ -49,6 +49,23 @@ class RouterTests(unittest.TestCase):
         self.assertTrue(coverage.supported)
         self.assertEqual(coverage.confidence, "high")
 
+    def test_source_coverage_uses_heading_and_filename_for_acronyms(self) -> None:
+        coverage = assess_source_coverage(
+            "What is DI?",
+            [
+                SearchResult(
+                    content="GetIt provides a simple service locator container.",
+                    filename="DI.md",
+                    path="DI.md",
+                    heading="Dependency Injection in Flutter",
+                    chunk_index=0,
+                    score=0.7,
+                )
+            ],
+        )
+
+        self.assertTrue(coverage.supported)
+
     def test_source_coverage_rejects_weak_sources(self) -> None:
         coverage = assess_source_coverage(
             "What is the project alpha goal?",

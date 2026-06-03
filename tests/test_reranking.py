@@ -41,6 +41,31 @@ class RerankingTests(unittest.TestCase):
         self.assertEqual([item.path for item in ranked], ["keyword.md", "semantic.md"])
         self.assertEqual(ranked[0].score, 1.0)
 
+    def test_definition_query_prioritizes_matching_document_intro(self) -> None:
+        intro = SearchResult(
+            content="# Dependency Injection in Flutter\n\nGetIt provides a DI container.",
+            filename="DI.md",
+            path="DI.md",
+            heading="Dependency Injection in Flutter",
+            chunk_index=0,
+            score=0.31,
+            fused_score=0.31,
+        )
+        later = SearchResult(
+            content="DI in Clean Architecture ties presentation, domain, and data layers.",
+            filename="DI.md",
+            path="DI.md",
+            heading="DI in Clean Architecture Layers",
+            chunk_index=6,
+            score=0.58,
+            fused_score=0.58,
+        )
+
+        ranked = rerank("what is DI?", [later, intro], limit=2, strategy=WeightedLexicalReranker())
+
+        self.assertEqual(ranked[0].chunk_index, 0)
+        self.assertGreater(ranked[0].score, ranked[1].score)
+
 
 if __name__ == "__main__":
     unittest.main()
