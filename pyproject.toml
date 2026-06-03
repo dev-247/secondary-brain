@@ -2,7 +2,7 @@
 name = "second-brain"
 version = "0.1.0"
 description = "Privacy-first local AI knowledge assistant"
-readme = "second-brain.md"
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "docling>=2.0.0",

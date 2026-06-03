@@ -316,6 +316,21 @@ Exit criteria:
 - Common failures have visible diagnostics.
 - Setup, upgrade, and recovery are documented.
 
+### Phase 8: Showcase MVP
+
+Target: 1-2 days
+
+- Add a public-facing README with pitch, current demo, quick start, architecture, validation, and status.
+- Add an MVP showcase guide for GitHub, LinkedIn, and portfolio walkthroughs.
+- Add launch copy for LinkedIn, portfolio, GitHub About, and short pitch.
+- Keep local user knowledge out of git unless explicitly promoted as a demo fixture.
+
+Exit criteria:
+
+- A visitor can understand what the product is in under one minute.
+- A demo user can run the web UI and reproduce the cited Ask flow.
+- The repo has credible validation evidence and honest limitations.
+
 ## Recommended Next Work
 
 The next best engineering move is Phase 0: stabilize the prototype. This makes the existing work trustworthy before expanding into UI, sync, wiki memory, or graph reasoning.
