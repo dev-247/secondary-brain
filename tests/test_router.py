@@ -106,6 +106,32 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(result.mode, "fast")
         self.assertEqual(result.confidence, "high")
 
+    def test_synthesize_uses_definition_fallback_when_model_abstains(self) -> None:
+        with patch("scripts.router._chat_ollama", return_value=ABSTENTION_MESSAGE):
+            result = synthesize_answer_result(
+                "what is DI",
+                [
+                    SearchResult(
+                        content="GetIt provides a simple, fast service locator/DI container[pub.dev](https://pub.dev/packages/get_it). Combined with injectable, boilerplate is generated.",
+                        filename="DI.md",
+                        path="DI.md",
+                        heading="Dependency Injection in Flutter",
+                        chunk_index=0,
+                        score=0.7,
+                        lexical_score=0.5,
+                    )
+                ],
+                mode="fast",
+            )
+
+        self.assertIn("Dependency Injection in Flutter", result.answer)
+        self.assertIn("[1]", result.answer)
+        self.assertNotIn("# Dependency Injection", result.answer)
+        self.assertNotIn("pub.dev", result.answer)
+        self.assertNotIn("Combined with", result.answer)
+        self.assertEqual(result.mode, "fast")
+        self.assertEqual(result.confidence, "high")
+
     def test_synthesize_rejects_uncited_model_answer(self) -> None:
         with patch("scripts.router._chat_ollama", return_value="Grounded answer without citation."):
             result = synthesize_answer_result(
@@ -117,6 +143,28 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(result.answer, ABSTENTION_MESSAGE)
         self.assertEqual(result.mode, "none")
         self.assertEqual(result.confidence, "low")
+
+    def test_synthesize_uses_definition_fallback_for_uncited_model_answer(self) -> None:
+        with patch("scripts.router._chat_ollama", return_value="DI means Dependency Injection."):
+            result = synthesize_answer_result(
+                "what is DI",
+                [
+                    SearchResult(
+                        content="GetIt provides a simple, fast service locator/DI container.",
+                        filename="DI.md",
+                        path="DI.md",
+                        heading="Dependency Injection in Flutter",
+                        chunk_index=0,
+                        score=0.7,
+                        lexical_score=0.5,
+                    )
+                ],
+                mode="fast",
+            )
+
+        self.assertIn("Dependency Injection in Flutter", result.answer)
+        self.assertIn("[1]", result.answer)
+        self.assertEqual(result.mode, "fast")
 
 
 if __name__ == "__main__":

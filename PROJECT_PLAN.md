@@ -283,7 +283,7 @@ Exit criteria:
 
 Phase 6 progress on 2026-06-02:
 
-- `make smoke` passes with 69 tests.
+- `make smoke` passes with 71 tests.
 - Added `scripts/web.py` with a local HTTP service and JSON status/wiki endpoints.
 - Added `web` CLI command and `make web` target for the browser UI.
 - Added a dense product shell showing system readiness, vault/wiki counts, graph relationship count, wiki pages, and core workflow commands.
@@ -297,6 +297,7 @@ Phase 6 progress on 2026-06-02:
 - Added actionable Command Center recommendations that link users directly to the relevant Ask, Wiki, Sources, or Operations section.
 - Fixed embedded Qdrant ingestion to reuse one local client across a vault ingest, preventing local lock conflicts after adding new vault files.
 - Improved short acronym definition questions so `what is DI?` prefers the matching document intro and uses source titles/filenames as answer evidence.
+- Added a cited extractive fallback for supported definition questions when the local model abstains or omits citations.
 
 ### Phase 7: Production Operations
 

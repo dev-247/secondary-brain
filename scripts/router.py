@@ -40,6 +40,7 @@ MODEL_ABSTENTION_PATTERNS = {
     "no relevant information",
 }
 CITATION_PATTERN = re.compile(r"\[\d+\]")
+QUERY_STOPWORDS = {"what", "whats", "is", "are", "the", "a", "an", "define", "explain"}
 
 
 @dataclass(frozen=True)
@@ -62,8 +63,13 @@ def _query_terms(query: str) -> set[str]:
     return {
         term
         for term in re.findall(r"[a-zA-Z0-9]+", query.lower())
-        if len(term) > 1
+        if len(term) > 1 and term not in QUERY_STOPWORDS
     }
+
+
+def _is_definition_query(query: str) -> bool:
+    lowered = query.lower().strip()
+    return lowered.startswith(("what is", "what's", "define ", "explain "))
 
 
 def assess_source_coverage(query: str, sources: list[SearchResult]) -> SourceCoverage:
@@ -107,6 +113,38 @@ def validate_answer_citations(answer: str) -> bool:
     if answer == ABSTENTION_MESSAGE:
         return True
     return bool(CITATION_PATTERN.search(answer))
+
+
+def _definition_fallback_answer(query: str, sources: list[SearchResult]) -> str | None:
+    if not _is_definition_query(query) or not sources:
+        return None
+
+    top_source = sources[0]
+    terms = _query_terms(query)
+    source_names = {top_source.filename.lower().removesuffix(".md"), top_source.path.lower().removesuffix(".md")}
+    if not terms.intersection(source_names):
+        return None
+
+    title = top_source.heading or top_source.filename
+    excerpt = _first_clean_excerpt(top_source.content)
+    if excerpt:
+        return f"{title}: {excerpt}. [1]"
+    return f"{title}. [1]"
+
+
+def _first_clean_excerpt(content: str) -> str:
+    for line in content.splitlines():
+        line = line.replace("\xa0", " ").strip()
+        if not line or line.startswith("#"):
+            continue
+        cleaned = re.sub(r"\[[^\]]+\]\([^)]+\)", "", line)
+        cleaned = re.sub(r"\[[^\]]+\]", "", cleaned)
+        cleaned = cleaned.replace("**", "").replace("__", "").strip()
+        cleaned = " ".join(cleaned.split())
+        cleaned = re.split(r"\.\s+", cleaned, maxsplit=1)[0]
+        if cleaned:
+            return cleaned.rstrip(".")
+    return ""
 
 
 def _build_context(sources: list[SearchResult]) -> str:
@@ -214,9 +252,14 @@ def synthesize_answer_result(
         answer = _chat_ollama(query, context)
 
     answer = normalize_answer(answer)
+    fallback = _definition_fallback_answer(query, sources)
     if answer == ABSTENTION_MESSAGE:
+        if fallback is not None:
+            return AnswerResult(fallback, selected_mode, coverage.confidence, coverage)
         return AnswerResult(answer, "none", "low", coverage)
     if not validate_answer_citations(answer):
+        if fallback is not None:
+            return AnswerResult(fallback, selected_mode, coverage.confidence, coverage)
         return AnswerResult(ABSTENTION_MESSAGE, "none", "low", coverage)
 
     return AnswerResult(answer, selected_mode, coverage.confidence, coverage)
