@@ -283,7 +283,7 @@ Exit criteria:
 
 Phase 6 progress on 2026-06-02:
 
-- `make smoke` passes with 66 tests.
+- `make smoke` passes with 67 tests.
 - Added `scripts/web.py` with a local HTTP service and JSON status/wiki endpoints.
 - Added `web` CLI command and `make web` target for the browser UI.
 - Added a dense product shell showing system readiness, vault/wiki counts, graph relationship count, wiki pages, and core workflow commands.
@@ -295,6 +295,7 @@ Phase 6 progress on 2026-06-02:
 - Added durable SQLite-backed web activity history so recent Ask and operation events survive server restarts.
 - Added Command Center v1 to surface readiness score, warnings, next actions, review queue, recent activity context, and local memory paths.
 - Added actionable Command Center recommendations that link users directly to the relevant Ask, Wiki, Sources, or Operations section.
+- Fixed embedded Qdrant ingestion to reuse one local client across a vault ingest, preventing local lock conflicts after adding new vault files.
 
 ### Phase 7: Production Operations
 

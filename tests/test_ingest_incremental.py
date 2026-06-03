@@ -149,6 +149,31 @@ class IncrementalIngestTests(unittest.TestCase):
         self.assertEqual(record.parser_version, "1")
         self.assertEqual(record.index_version, CURRENT_INDEX_VERSION)
 
+    def test_ingest_vault_reuses_one_qdrant_client_for_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            vault = root / "vault"
+            metadata = root / "metadata.sqlite"
+            vault.mkdir()
+            (vault / "alpha.md").write_text("# Alpha\n\nOne.", encoding="utf-8")
+            (vault / "beta.md").write_text("# Beta\n\nTwo.", encoding="utf-8")
+            client = object()
+
+            with (
+                patch("scripts.ingest.check_qdrant_health", return_value=True),
+                patch("scripts.ingest.get_client", return_value=client),
+                patch("scripts.ingest.ensure_collection"),
+                patch("scripts.ingest.cleanup_deleted_sources", return_value=0),
+                patch("scripts.ingest.ingest_file", return_value=1) as ingest_file,
+            ):
+                stats = ingest_vault(vault, metadata_path=metadata)
+
+        self.assertEqual(stats["chunks"], 2)
+        self.assertEqual(ingest_file.call_count, 2)
+        self.assertTrue(
+            all(call.kwargs["client"] is client for call in ingest_file.call_args_list)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

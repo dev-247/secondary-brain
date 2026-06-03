@@ -131,6 +131,7 @@ def ingest_file(
     path: Path,
     vault_root: Path | None = None,
     metadata_path: Path = METADATA_DB_PATH,
+    client: object | None = None,
 ) -> int:
     vault_root = vault_root or VAULT_DIR
     relative_path = path.relative_to(vault_root).as_posix()
@@ -161,7 +162,7 @@ def ingest_file(
         )
         return 0
 
-    client = get_client()
+    client = client or get_client()
     ensure_collection(client)
     if previous_record is not None:
         delete_indexed_source(client, relative_path, previous_record.chunks)
@@ -263,7 +264,7 @@ def ingest_vault(
             progress.update(task, description=f"Ingesting {path.name}")
             relative_path = path.relative_to(root).as_posix()
             try:
-                chunks = ingest_file(path, vault_root=root, metadata_path=metadata_path)
+                chunks = ingest_file(path, vault_root=root, metadata_path=metadata_path, client=client)
             except Exception as exc:
                 failed_files.append({"path": relative_path, "error": str(exc)})
                 progress.advance(task)
