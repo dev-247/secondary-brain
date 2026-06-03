@@ -109,6 +109,18 @@ def normalize_answer(answer: str) -> str:
     return cleaned
 
 
+def polish_answer(answer: str) -> str:
+    if answer == ABSTENTION_MESSAGE:
+        return answer
+
+    lines = [line.strip() for line in answer.strip().splitlines()]
+    lines = [line for line in lines if line]
+    if len(lines) >= 2 and re.fullmatch(r"(?:\[\d+\]\s*)+", lines[-1]):
+        lines[-2] = f"{lines[-2].rstrip()} {lines[-1]}"
+        lines.pop()
+    return "\n\n".join(lines)
+
+
 def validate_answer_citations(answer: str) -> bool:
     if answer == ABSTENTION_MESSAGE:
         return True
@@ -251,7 +263,7 @@ def synthesize_answer_result(
     else:
         answer = _chat_ollama(query, context)
 
-    answer = normalize_answer(answer)
+    answer = polish_answer(normalize_answer(answer))
     fallback = _definition_fallback_answer(query, sources)
     if answer == ABSTENTION_MESSAGE:
         if fallback is not None:

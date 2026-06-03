@@ -9,6 +9,7 @@ from scripts.router import (
     assess_source_coverage,
     choose_mode,
     normalize_answer,
+    polish_answer,
     validate_answer_citations,
     synthesize_answer,
     synthesize_answer_result,
@@ -94,6 +95,13 @@ class RouterTests(unittest.TestCase):
         self.assertFalse(validate_answer_citations("Project Alpha keeps documents local."))
         self.assertTrue(validate_answer_citations(ABSTENTION_MESSAGE))
 
+    def test_polish_answer_moves_standalone_citation_to_previous_sentence(self) -> None:
+        answer = "Dependency Injection keeps components loosely coupled.\n\n[1]"
+
+        polished = polish_answer(answer)
+
+        self.assertEqual(polished, "Dependency Injection keeps components loosely coupled. [1]")
+
     def test_synthesize_answer_result_includes_confidence(self) -> None:
         with patch("scripts.router._chat_ollama", return_value="Grounded answer [1]."):
             result = synthesize_answer_result(
@@ -105,6 +113,17 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(result.answer, "Grounded answer [1].")
         self.assertEqual(result.mode, "fast")
         self.assertEqual(result.confidence, "high")
+
+    def test_synthesize_polishes_model_answer_before_returning_it(self) -> None:
+        with patch("scripts.router._chat_ollama", return_value="Grounded answer.\n\n[1]"):
+            result = synthesize_answer_result(
+                "What is the project alpha goal?",
+                [source("Project Alpha goal is grounded answers with citations.")],
+                mode="fast",
+            )
+
+        self.assertEqual(result.answer, "Grounded answer. [1]")
+        self.assertEqual(result.mode, "fast")
 
     def test_synthesize_uses_definition_fallback_when_model_abstains(self) -> None:
         with patch("scripts.router._chat_ollama", return_value=ABSTENTION_MESSAGE):
